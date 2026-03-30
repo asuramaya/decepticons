@@ -25,6 +25,8 @@ They are self-contained descendants that live in this repo. They are not imports
   causal statistical-memory composition example in `projects/causal/`
 - `packed_memory_controller`
   causal memory-first confidence/controller example over the shared statistical-backoff layer in `projects/causal/`
+- `cache_repair`
+  causal cache-view repair example over shared exact/backoff prediction records in `projects/causal/`
 - `program_controller`
   causal higher-order routing/controller descendant kept project-local above the shared statistical-backoff layer in `projects/causal/`
 - `proxy_features`
@@ -35,10 +37,14 @@ They are self-contained descendants that live in this repo. They are not imports
   bridge agreement-focused descendant in `projects/bridge/`
 - `teacher_export`
   bridge export descendant with local teacher-label and attack-report policy in `projects/bridge/`
+- `support_export`
+  bridge support/export descendant over shared cache-view and teacher/export surfaces in `projects/bridge/`
 - `bidirectional_analysis`
   analysis-only descendant in `projects/oracle/`
 - `field_reconstruction`
   noncausal reconstruction descendant in `projects/noncausal/`
+- `replay_fields`
+  noncausal field-overlap replay descendant over the shared noncausal adapter in `projects/noncausal/`
 - `payload_choice`
   noncausal payload-layout descendant kept project-local in `projects/noncausal/`
 - `patch_latent`
@@ -68,7 +74,7 @@ If you want to understand the repo through examples:
 4. `projects/causal/memory_stability` through `causal/program_controller`
 5. `projects/bridge/proxy_features`
 6. `projects/bridge/feature_export`
-7. `projects/bridge/agreement_export` and `bridge/teacher_export`
-8. `projects/noncausal/field_reconstruction` and `noncausal/payload_choice`
+7. `projects/bridge/agreement_export`, `bridge/teacher_export`, and `bridge/support_export`
+8. `projects/noncausal/field_reconstruction`, `noncausal/replay_fields`, and `noncausal/payload_choice`
 9. `projects/oracle/bidirectional_analysis`
 10. `projects/byte_latent/patch_latent`

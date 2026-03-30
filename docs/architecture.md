@@ -63,14 +63,20 @@ These are not toy demos. They are boundary tests.
   causal example that composes the shared statistical-backoff memory layer and exact-context repair
 - `causal/packed_memory_controller/`
   causal memory-first descendant that adds an example-local trust controller over shared backoff priors and exact repair
+- `causal/cache_repair/`
+  causal descendant that uses the shared cache-view layer directly and keeps only the repair gate local
 - `bridge/proxy_features/`
   bridge-style descendant that turns probability streams into causal proxy features
 - `bridge/feature_export/`
   bridge-style descendant that packages paired probability streams into a small export/report flow
 - `bridge/agreement_export/`
   bridge-style descendant that focuses on agreement and disagreement over paired probability streams
+- `bridge/support_export/`
+  bridge-style descendant that exports shared cache-view support/order summaries through the shared teacher/export contract
 - `noncausal/field_reconstruction/`
   noncausal field reconstruction descendant built from bidirectional context, exact-context memory, and replay accounting
+- `noncausal/replay_fields/`
+  noncausal descendant that overlays field-shaped spans on the shared replay surface and keeps field policy local
 - `oracle/bidirectional_analysis/`
   analysis-only descendant that reuses sampled readout, routing, and train-mode checkpoints
 - `byte_latent/patch_latent/`
@@ -126,6 +132,7 @@ The kernel is easiest to understand by category rather than by filename order.
 - [`exact_context.py`](../src/open_predictive_coder/exact_context.py)
 - [`latents.py`](../src/open_predictive_coder/latents.py)
 - [`learned_segmentation.py`](../src/open_predictive_coder/learned_segmentation.py)
+- [`memory_cache.py`](../src/open_predictive_coder/memory_cache.py)
 - [`ngram_memory.py`](../src/open_predictive_coder/ngram_memory.py)
 - [`statistical_backoff.py`](../src/open_predictive_coder/statistical_backoff.py)
 - [`patch_latent_blocks.py`](../src/open_predictive_coder/patch_latent_blocks.py)
@@ -181,6 +188,7 @@ Stable kernel examples of the right kind of promotion:
 - `ArtifactMetadata` / `ReplaySpan` / `ArtifactAccounting`
 - `select_scored_spans` / `replay_spans_from_scores`
 - `ProbabilityDiagnostics` / `probability_diagnostics`
+- `ExactContextCache` / `StatisticalBackoffCache`
 
 Still project-local on purpose:
 

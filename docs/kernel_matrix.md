@@ -74,6 +74,7 @@ Use [`frontier_pass.md`](./frontier_pass.md) for the current descendant-frontier
 | `memory.exact_context` | causal exact-history experts over exact1/exact2/exact3 style contexts | causal descendant docs and early exact-count branches | count-based language modeling, causal support-aware correction | Implemented |
 | `memory.ngram` | smoothed unigram/bigram/trigram statistical tables | later causal packed-memory descendants | classical n-gram language modeling and lightweight causal memory | Implemented |
 | `memory.statistical_backoff` | fitted global mixture over unigram/bigram/trigram priors with prefix-time fallback semantics | generalized packed-memory descendants rebuilt from primitives | memory-first backoff modeling and lightweight prior mixing | Implemented |
+| `memory.cache_views` | unified active/highest-order prediction records over exact-context and statistical-backoff memory | cache-repair and support-export descendants | reusable memory prediction surfaces above specific memory implementations | Implemented |
 | `controllers.gating` | reusable fast-to-mid and mid-to-slow pathway gates | `carving_machine/models.py#L224` | adaptive control over multiscale substrate paths | Implemented |
 | `controllers.routing` | causal substrate/path selection over branch summaries | `carving_machine/models.py#L1129` | adaptive control over substrate views | Implemented |
 | `controllers.modulation` | hormone/modulation paths | `carving_machine/models.py#L1354` | side-channel modulation over substrate | Implemented as primitive |
@@ -150,6 +151,7 @@ The kernel is no longer just an echo-state toy. It now has:
 - exact-context memory and support-weighted blending primitives
 - smoothed n-gram memory primitive
 - fitted statistical backoff layer over order-wise n-gram priors
+- shared cache-view wrappers over exact-context and statistical-backoff prediction records
 - feature-view primitives for both byte-latent and hierarchical state
 - bridge feature utilities over probability arrays
 - family-neutral probability diagnostics over probability arrays

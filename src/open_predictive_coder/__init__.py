@@ -99,6 +99,7 @@ from .learned_segmentation import (
 )
 from .hierarchical_views import HierarchicalFeatureView, HierarchicalSummary
 from .linear_views import LinearMemoryFeatureView
+from .memory_cache import ExactContextCache, MemoryPredictionRecord, MemoryPredictionSummary, StatisticalBackoffCache
 from .ngram_memory import NgramMemory, NgramMemoryConfig, NgramMemoryReport
 from .noncausal_reconstructive import (
     NoncausalReconstructiveAdapter,
@@ -292,6 +293,8 @@ __all__ = [
     "LocalByteEncoderConfig",
     "make_artifact_accounting",
     "make_replay_span",
+    "MemoryPredictionRecord",
+    "MemoryPredictionSummary",
     "MemoryMergeMode",
     "MixedMemoryConfig",
     "MixedMemorySubstrate",
@@ -367,6 +370,7 @@ __all__ = [
     "StatisticalBackoffPrediction",
     "StatisticalBackoffScore",
     "StatisticalBackoffTrace",
+    "StatisticalBackoffCache",
     "tag_metadata",
     "TeacherExportAdapter",
     "TeacherExportConfig",
@@ -375,6 +379,7 @@ __all__ = [
     "TransferProbeReport",
     "TransferEvaluation",
     "TokenSubstrate",
+    "ExactContextCache",
     "ensure_tokens",
     "evaluate_dataset",
     "evaluate_rollout_curve",

@@ -86,6 +86,29 @@ class ArtifactAuditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             audit_artifact(accounting, payload_bytes=-1)
 
+    def test_zero_payload_ratios_clamp_to_zero(self) -> None:
+        record = audit_artifact(
+            make_artifact_accounting("empty", artifact_bytes=0, replay_bytes=0),
+            side_data_bytes=0,
+            payload_bytes=0,
+        )
+
+        self.assertEqual(record.coverage_ratio, 0.0)
+        self.assertEqual(record.payload_coverage_ratio, 0.0)
+        self.assertEqual(record.side_data_ratio, 0.0)
+
+    def test_summary_gap_and_empty_summary_are_well_defined(self) -> None:
+        summary = summarize_artifact_audits(())
+        self.assertEqual(summary.record_count, 0)
+        self.assertEqual(summary.artifact_gap_bytes, 0)
+        self.assertEqual(summary.coverage_ratio, 0.0)
+        self.assertEqual(summary.payload_coverage_ratio, 0.0)
+
+        first = audit_artifact(make_artifact_accounting("a", artifact_bytes=10, replay_bytes=9))
+        second = audit_artifact(make_artifact_accounting("b", artifact_bytes=15, replay_bytes=7))
+        combined = summarize_artifact_audits((first, second))
+        self.assertEqual(combined.artifact_gap_bytes, 9)
+
 
 if __name__ == "__main__":
     unittest.main()

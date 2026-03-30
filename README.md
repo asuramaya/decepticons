@@ -165,6 +165,7 @@ This implementation synthesizes ideas from:
 - `ExactContextMemory`: causal exact-history count memory over 1/2/3-step contexts
 - `NgramMemory`: smoothed unigram/bigram/trigram statistical memory primitive
 - `StatisticalBackoffMemory`: fitted global mixture over order-wise n-gram priors with prefix-time fallback semantics
+- `ExactContextCache` and `StatisticalBackoffCache`: shared cache-view wrappers exposing active and highest-order prediction records
 - `BridgeExportAdapter`: generic export/report surface over paired probability streams
 - `bridge_feature_arrays`: causal proxy features derived from probability arrays
 - `BidirectionalContextProbe`: noncausal context determinism and leave-one-out probe

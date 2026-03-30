@@ -140,12 +140,17 @@ def audit_artifact(
     metadata: ArtifactMetadata | dict[str, Any] | None = None,
     **updates: Any,
 ) -> ArtifactAuditRecord:
+    if metadata is None:
+        record_metadata = coerce_artifact_metadata(accounting.metadata, **updates)
+    else:
+        merged = accounting.metadata.merged(**coerce_artifact_metadata(metadata).to_dict())
+        record_metadata = coerce_artifact_metadata(merged, **updates)
     return ArtifactAuditRecord(
         accounting=accounting,
         side_data_count=side_data_count,
         side_data_bytes=side_data_bytes,
         payload_bytes=payload_bytes,
-        metadata=coerce_artifact_metadata(metadata, **updates),
+        metadata=record_metadata,
     )
 
 
