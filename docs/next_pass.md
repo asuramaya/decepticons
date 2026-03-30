@@ -4,78 +4,86 @@ This document turns the current state into the next concrete implementation pass
 
 ## Goal
 
-Build the first real `src/`-level causal adapter while continuing to improve readability and keep project policy out of
-the kernel.
+Harden the new `src/`-level causal adapter and prove that it is a real shared contract rather than a renamed Conker
+branch.
 
 ## Why This Is The Next Pass
 
-The repo already has:
+The repo now has:
 
 - enough substrate families
 - enough controller primitives
 - enough memory and view surfaces
 - enough runtime scaffolding
 - enough project descendants to test the boundary
+- a first `src/`-level `causal_predictive` adapter
 
-What it does not yet have is a first-class causal adapter in `src/` that uses those pieces together.
+That changes the problem.
 
-That is the most important missing layer.
+The next step is not to invent another core abstraction immediately. The next step is to pressure-test the new causal
+contract across descendants and keep the kernel readable while doing it.
 
 ## Workstreams
 
-### 1. `causal_predictive` adapter in `src/`
+### 1. Thin Conker around the causal contract
 
-Build the first reusable causal adapter from existing pieces:
+Make the Conker replicas consume the shared causal layer wherever the behavior is actually common.
 
-- exact-context memory
-- frozen experts
-- train/eval surfaces
-- artifact accounting
+What should stay local:
 
-The first version can be modest. It does not need to be the final Conker.
-
-Acceptance criteria:
-
-- lives in `src/`
-- has `fit`, `score`, `predict_proba`, and basic accounting
-- uses `ArtifactAccounting` or adjacent runtime hooks
-- is simpler than the current Conker project replicas
-
-### 2. Wire artifact accounting into causal paths
-
-Use the new artifact/runtime slice for:
-
-- replay span reporting
-- artifact byte accounting
-- metadata tagging for evaluation mode
+- mixer policy
+- residual-repair policy
+- legality framing
+- benchmark and frontier claims
 
 Acceptance criteria:
 
-- at least one causal path reports meaningful artifact accounting
-- the API remains policy-free
+- less duplicate causal boilerplate in `examples/projects/conker_*`
+- Conker policy still clearly lives in project code
 
-### 3. Keep refining `carving_machine_like`, but only in project space
+### 2. Harden causal runtime and accounting
 
-The ancestor example is now good enough to act as a boundary test.
+The causal adapter now exists, so the next reusable layer is better reporting and accounting around it.
 
-The next work there is:
+Focus on:
+
+- replay-safe accounting
+- metadata tagging
+- lightweight causal report wrappers
+- evaluation hooks that do not import descendant policy
+
+Acceptance criteria:
+
+- causal reports are useful outside one example
+- artifact/replay helpers stay policy-free
+
+### 3. Add a second consumer of the causal layer
+
+The causal adapter is not stable until something besides the Conker line pushes on it.
+
+Best candidates:
+
+- a bridge/export-shaped descendant
+- a noncausal analysis or replay descendant that still reuses part of the causal surface
+
+Acceptance criteria:
+
+- at least one more descendant reuses some of the same causal contract
+- any new promotion into `src/` is justified by repeated use
+
+### 4. Keep refining `carving_machine_like`, but only in project space
+
+The ancestor example remains a boundary test, not a reason to widen `src/` recklessly.
+
+Likely next work there:
 
 - stronger predictor behavior
 - more faithful routed/modulated variants
 - better checkpoint reporting
 
-None of that should widen `src/` unless another descendant needs the same mechanism.
+Acceptance criteria:
 
-### 4. Add one bridge-shaped or noncausal descendant after the causal adapter lands
-
-The current oracle example is enough for now.
-
-After the causal adapter exists, the next descendant should probably be one of:
-
-- a bridge/export example
-- a noncausal reconstructive example
-
-The purpose is to keep checking whether new kernel abstractions are actually shared.
+- ancestor-specific policy stays outside the kernel unless it repeats elsewhere
 
 ### 5. Keep tightening repo readability
 
@@ -88,10 +96,10 @@ Every pass should also improve orientation:
 
 ## Recommended Order
 
-1. create `src`-level causal adapter
-2. use artifact accounting in that adapter
-3. thin the Conker replicas around it
-4. only then add another downstream family
+1. thin Conker around the shared causal adapter
+2. harden causal runtime and accounting
+3. add a second consumer of the causal layer
+4. only then consider wider causal abstractions
 
 ## Non-Goals For The Next Pass
 
@@ -100,13 +108,14 @@ These should wait:
 - full optimizer/training harness extraction
 - full legality framework
 - bridge/export finalization
-- noncausal replay economics in `src`
+- noncausal replay economics in `src/`
 - preset stabilization
 
 ## Definition Of Done
 
 The pass is done when:
 
-- the repo has one real causal adapter in `src/`
-- the Conker examples clearly read as descendants of that adapter or as stress tests around it
+- the causal adapter clearly reads as a shared `src/` contract
+- Conker descendants look thinner around that contract
+- at least one more descendant pushes on the same causal surface
 - docs explain the boundary without requiring project history to decode the codebase

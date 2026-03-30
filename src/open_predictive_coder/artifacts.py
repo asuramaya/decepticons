@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -58,6 +58,22 @@ class ArtifactMetadata:
         return ArtifactMetadata.from_mapping(payload)
 
 
+def coerce_artifact_metadata(
+    metadata: ArtifactMetadata | Mapping[str, Any] | None = None,
+    /,
+    **updates: Any,
+) -> ArtifactMetadata:
+    if metadata is None:
+        base = ArtifactMetadata()
+    elif isinstance(metadata, ArtifactMetadata):
+        base = metadata
+    elif isinstance(metadata, Mapping):
+        base = ArtifactMetadata.from_mapping(metadata)
+    else:
+        raise TypeError("metadata must be an ArtifactMetadata, mapping, or None")
+    return base.merged(**updates) if updates else base
+
+
 @dataclass(frozen=True)
 class ReplaySpan:
     start: int
@@ -78,6 +94,22 @@ class ReplaySpan:
     @property
     def is_empty(self) -> bool:
         return self.length == 0
+
+
+def make_replay_span(
+    start: int,
+    stop: int,
+    *,
+    label: str | None = None,
+    metadata: ArtifactMetadata | Mapping[str, Any] | None = None,
+    **updates: Any,
+) -> ReplaySpan:
+    return ReplaySpan(
+        start=start,
+        stop=stop,
+        label=label,
+        metadata=coerce_artifact_metadata(metadata, **updates),
+    )
 
 
 @dataclass(frozen=True)
@@ -118,8 +150,29 @@ class ArtifactAccounting:
         return max(self.artifact_bytes - self.replay_bytes, 0)
 
 
+def make_artifact_accounting(
+    artifact_name: str,
+    artifact_bytes: int,
+    replay_bytes: int,
+    *,
+    replay_spans: Sequence[ReplaySpan] = (),
+    metadata: ArtifactMetadata | Mapping[str, Any] | None = None,
+    **updates: Any,
+) -> ArtifactAccounting:
+    return ArtifactAccounting(
+        artifact_name=artifact_name,
+        artifact_bytes=artifact_bytes,
+        replay_bytes=replay_bytes,
+        replay_spans=tuple(replay_spans),
+        metadata=coerce_artifact_metadata(metadata, **updates),
+    )
+
+
 __all__ = [
     "ArtifactAccounting",
     "ArtifactMetadata",
+    "coerce_artifact_metadata",
+    "make_artifact_accounting",
+    "make_replay_span",
     "ReplaySpan",
 ]

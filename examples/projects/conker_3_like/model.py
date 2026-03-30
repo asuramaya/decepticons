@@ -8,11 +8,11 @@ PROJECTS_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECTS_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECTS_ROOT))
 
-from conker_shared import ResidualCorrectionModel, ResidualScore, build_delay_local_expert, build_linear_memory_expert
+from conker_shared import ConkerReplicaBase, ResidualCorrectionModel, build_delay_local_expert, build_linear_memory_expert
 
 
 @dataclass
-class Conker3Replica:
+class Conker3Replica(ConkerReplicaBase):
     model: ResidualCorrectionModel
 
     @classmethod
@@ -32,9 +32,3 @@ class Conker3Replica:
             alpha=1e-4,
         )
         return cls(model=ResidualCorrectionModel(base_expert=linear, local_expert=local, alpha=1e-4))
-
-    def fit(self, data: object) -> dict[str, float]:
-        return self.model.fit(data)
-
-    def score(self, sequence: object) -> ResidualScore:
-        return self.model.score(sequence)

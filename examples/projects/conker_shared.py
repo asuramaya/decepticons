@@ -4,6 +4,9 @@ Kernel code owns reusable primitives such as substrates, views, readouts,
 and runtime evaluation surfaces. This module stays in the project layer and
 only hosts the Conker-family composition policy plus the small builders that
 multiple Conker descendants reuse.
+
+It also provides a very thin project-layer replica base so the descendant
+wrappers do not repeat the same fit/score delegation boilerplate.
 """
 
 from __future__ import annotations
@@ -99,6 +102,16 @@ class ResidualScore:
     base_bits_per_byte: float
     local_bits_per_byte: float
     corrected_bits_per_byte: float
+
+
+class ConkerReplicaBase:
+    model: object
+
+    def fit(self, data: object):
+        return self.model.fit(data)
+
+    def score(self, sequence: object):
+        return self.model.score(sequence)
 
 
 class DelayWindowView:
@@ -428,6 +441,7 @@ def build_hierarchical_stability_expert(
 
 
 __all__ = [
+    "ConkerReplicaBase",
     "ExpertMixtureModel",
     "FrozenReadoutExpert",
     "MixtureScore",

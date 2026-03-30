@@ -55,6 +55,8 @@ The intended line is:
 
 This repo is standalone. The example descendants under [`examples/projects`](./examples/projects) are reconstructions
 built in this repo from the extracted primitives; they are not imported or copied from sibling repositories.
+The first causal adapter should be treated as the shared contract that Conker-style descendants thin around, not as a
+Conker-specific branch.
 
 What belongs in the kernel:
 
@@ -107,9 +109,9 @@ Those patterns illustrate the problem family:
 - offline bridge features exported into causal consumers
 - byte-patch latent modeling over a shorter internal sequence
 
-The only fully extracted adapter in `src/` today is still `byte-latent`. But that is now just one downstream slice.
-The kernel already includes exact-context causal memory primitives, and the repo carries example-project surfaces for
-both a `carving_machine`-like hierarchical path and an early `conker`-like causal exact-context path.
+The extracted adapters in `src/` today are `byte-latent` and the first reusable `causal_predictive` contract.
+The kernel also carries example-project surfaces for both a `carving_machine`-like hierarchical path and the more
+specific `conker`-family causal descendants that sit on top of the shared causal layer.
 
 ## Design Thesis
 
@@ -131,7 +133,8 @@ This implementation synthesizes ideas from:
 ## What The Library Includes
 
 - `ByteLatentPredictiveCoder`: the extracted byte-latent adapter
-- `OpenPredictiveCoder`: compatibility alias for the same adapter
+- `CausalPredictiveAdapter`: the first extracted causal exact-context plus auxiliary-expert adapter
+- `OpenPredictiveCoder`: compatibility alias for `ByteLatentPredictiveCoder`
 - `EchoStateSubstrate`: frozen recurrent substrate
 - `DelayLineSubstrate`: deterministic delay-memory substrate
 - `LinearMemorySubstrate`: frozen linear decay-bank memory substrate
@@ -152,6 +155,7 @@ This implementation synthesizes ideas from:
 - `ExactContextMemory`: causal exact-history count memory over 1/2/3-step contexts
 - `SupportWeightedMixer`: support-biased blending over base and exact-context experts
 - `ArtifactMetadata`, `ReplaySpan`, and `ArtifactAccounting`: causal artifact/replay/accounting primitives
+- `CausalTrace`, `CausalSequenceReport`, and `CausalFitReport`: causal reporting wrappers over runtime/accounting surfaces
 - `RidgeReadout`: closed-form readout fitting
 - `FrozenReadoutExpert`: frozen substrate plus feature-function expert primitive
 - sparse reservoir builders with Erdos-Renyi and small-world topologies
@@ -200,7 +204,7 @@ opc fit --input ./corpus.txt --prompt "predictive " --generate 80
 
 ## Repo Layout
 
-- `src/open_predictive_coder/`: reusable kernel primitives and the first concrete adapter
+- `src/open_predictive_coder/`: reusable kernel primitives plus extracted causal and byte-latent adapters
 - `docs/`: architecture, roadmap, literature, landscape, and extraction notes
 - `examples/`: quickstart, descendant-shaped example projects, and development tools
 - `tests/`: kernel, runtime, boundary, and project-descendant test suites
@@ -220,6 +224,7 @@ still stops short of the full `carving_machine` training/runtime harness and leg
 the shared kernel cleanly enough that multiple descendants can be built on top of it without forcing their policies
 back into the primitive layer. In the current replication round, the repeated promotions from project code into the
 kernel were `LinearMemorySubstrate`, `LinearMemoryFeatureView`, `FrozenReadoutExpert`, `PredictiveSurpriseController`,
-`HormoneModulator`, `SampledMultiscaleReadout`, `TrainModeConfig`, and the first `ArtifactMetadata` / `ReplaySpan` /
-`ArtifactAccounting` runtime slice; the Conker-family mixers, oracle comparison logic, and `brelt` composition policy
-remain deliberately project-local, and diagnostics stayed under `examples/`.
+`HormoneModulator`, `SampledMultiscaleReadout`, `TrainModeConfig`, the first `ArtifactMetadata` / `ReplaySpan` /
+`ArtifactAccounting` runtime slice, and the first shared `CausalPredictiveAdapter`; the Conker-family mixers, oracle
+comparison logic, and `brelt` composition policy remain deliberately project-local, and diagnostics stayed under
+`examples/`.

@@ -12,6 +12,7 @@ Examples:
 - `test_delay.py`
 - `test_hierarchical.py`
 - `test_linear_memory.py`
+- `test_causal_adapter.py`
 - `test_control.py`
 - `test_gating.py`
 - `test_routing.py`

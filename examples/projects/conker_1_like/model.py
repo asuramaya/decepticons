@@ -8,11 +8,11 @@ PROJECTS_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECTS_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECTS_ROOT))
 
-from conker_shared import ExpertMixtureModel, MixtureScore, build_hierarchical_stability_expert, build_linear_memory_expert
+from conker_shared import ConkerReplicaBase, ExpertMixtureModel, build_hierarchical_stability_expert, build_linear_memory_expert
 
 
 @dataclass
-class Conker1Replica:
+class Conker1Replica(ConkerReplicaBase):
     model: ExpertMixtureModel
 
     @classmethod
@@ -30,9 +30,3 @@ class Conker1Replica:
             alpha=1e-4,
         )
         return cls(model=ExpertMixtureModel((compressor, stability), alpha=1e-4))
-
-    def fit(self, data: object) -> dict[str, float]:
-        return self.model.fit(data)
-
-    def score(self, sequence: object) -> MixtureScore:
-        return self.model.score(sequence)

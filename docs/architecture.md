@@ -59,6 +59,8 @@ These are not toy demos. They are boundary tests.
   byte-patch latent descendant shaped after the real `brelt` repo
 
 If a mechanism is repeated across multiple descendants, it is a candidate for promotion into `src/`.
+The first causal adapter is the next example of that rule: it should land in `src/` only once it reads as a shared
+contract rather than a Conker-specific model.
 
 ### 3. Development Tooling
 
@@ -122,6 +124,7 @@ The kernel is easiest to understand by category rather than by filename order.
 ### Adapters And Presets
 
 - [`adapters.py`](../src/open_predictive_coder/adapters.py)
+- [`causal_predictive.py`](../src/open_predictive_coder/causal_predictive.py)
 - [`model.py`](../src/open_predictive_coder/model.py)
 - [`presets.py`](../src/open_predictive_coder/presets.py)
 - [`cli.py`](../src/open_predictive_coder/cli.py)
@@ -155,13 +158,19 @@ Still project-local on purpose:
 - `brelt` patch-boundary tuning and local/global bridge composition
 - ancestor-specific predictor head choices
 
+Recent shared promotion:
+
+- `CausalPredictiveAdapter`
+
 ## Immediate Architectural Direction
 
-The next real jump is not another example. It is the first true `src/`-level causal adapter that consumes:
+The next real jump is not another single descendant. It is pressure-testing the new shared causal adapter across more
+than one consumer while keeping descendant policy out of `src/`.
 
-- exact-context memory
-- experts
-- train/eval surfaces
-- artifact accounting
+That means:
 
-That is the point where the repo graduates from "kernel plus descendants" to "kernel plus at least one real downstream contract."
+- thinning the Conker descendants around the causal adapter
+- hardening the causal runtime/accounting contract
+- adding a second consumer, likely bridge-shaped or noncausal, that reuses some of the same causal surfaces
+
+That is how the repo graduates from "first causal contract exists" to "the contract is actually stable enough to keep."

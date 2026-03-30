@@ -77,9 +77,9 @@ Use [`lineage.md`](./lineage.md) for the attribution rule behind the upstream wo
 | `runtime.eval_light` | next-step and single-rollout scoring over current adapters | `carving_machine/training.py#L64` | sequence predictive coding and continual modeling | Implemented |
 | `runtime.train_eval` | weighted dataset eval, checkpointed rollout curves, and transfer probes | `carving_machine/training.py#L54`, `carving_machine/training.py#L111`, `carving_machine/experiments.py#L493` | sequence predictive coding and continual modeling | Implemented |
 | `runtime.train_modes` | detached vs through-state semantics, sparse slow updates, rollout checkpoints | `bptt_test.py` | BPTT versus detached-state runtime regimes | Implemented |
-| `runtime.artifacts_audits` | legality, replay, artifact-boundary surfaces | downstream docs, especially Conker family | compression/accounting discipline | Partial: metadata, replay spans, and accounting primitives implemented |
+| `runtime.artifacts_audits` | legality, replay, artifact-boundary surfaces | downstream docs, especially Conker family | compression/accounting discipline | Partial: metadata, replay spans, accounting helpers, and causal report wrappers implemented |
 | `adapters.byte_latent` | first concrete downstream adapter | current library | BLT 2025, UT 2018 | Implemented |
-| `adapters.causal_predictive` | causal predictive/compressive runtime systems | `conker`-family docs | sequence predictive coding | Not started |
+| `adapters.causal_predictive` | causal predictive/compressive runtime systems | `conker`-family docs | sequence predictive coding | Implemented |
 | `adapters.noncausal_reconstructive` | document-field replay systems | `blinx`-family docs | reconstruction and side-data economics | Not started |
 | `adapters.oracle_analysis` | bidirectional structure analysis | `blinx oracle` docs | predictive coding as analysis, not runtime | Not started |
 | `adapters.bridge_export` | offline teacher to causal export layer | `giddy-up` docs | explicit boundary discipline | Not started |
@@ -136,6 +136,7 @@ The kernel is no longer just an echo-state toy. It now has:
 - lightweight rollout and next-step evaluation
 - weighted dataset eval, rollout curves, and transfer probes
 - frozen readout expert primitive
+- first shared causal adapter
 - byte-latent adapter
 - example-project smoke surfaces for `carving_machine`-like and early `conker`-like builds
 - `Conker-1/2/3` style replica projects built from primitives
@@ -146,7 +147,8 @@ The line to preserve is:
 - if a choice is really a downstream task policy, legality rule, artifact boundary, or evaluation claim, it does not
   belong here
 
-That is why `carving_machine` remains the main source anchor even when the first concrete adapter in `src/` is still
-`byte-latent`.
+That is why `carving_machine` remains the main source anchor even now that `src/` contains both `byte-latent` and a
+first `causal_predictive` adapter. The line still matters: descendants can thin around the causal contract without
+forcing Conker policy back into the kernel.
 
 That is enough to justify continuing kernel-first rather than inventing downstream codenames too early.

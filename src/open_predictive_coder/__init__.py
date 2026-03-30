@@ -10,7 +10,14 @@ The full package map and layer boundary are documented in `docs/architecture.md`
 """
 
 # Foundation and configuration surfaces.
-from .artifacts import ArtifactAccounting, ArtifactMetadata, ReplaySpan
+from .artifacts import (
+    ArtifactAccounting,
+    ArtifactMetadata,
+    coerce_artifact_metadata,
+    make_artifact_accounting,
+    make_replay_span,
+    ReplaySpan,
+)
 from .codecs import ByteCodec, ensure_tokens
 from .config import (
     ByteLatentPredictiveCoderConfig,
@@ -90,7 +97,15 @@ from .eval import NextStepScore, RolloutEvaluation, RolloutMode, evaluate_rollou
 from .experts import ExpertFitReport, ExpertScore, FrozenReadoutExpert
 from .metrics import bits_per_byte_from_logits, bits_per_byte_from_probabilities
 from .readouts import RidgeReadout
-from .runtime import FitReport, SequenceReport, SequenceTrace
+from .runtime import (
+    CausalFitReport,
+    CausalSequenceReport,
+    CausalTrace,
+    FitReport,
+    SequenceReport,
+    SequenceTrace,
+    tag_metadata,
+)
 from .train_modes import TrainModeConfig, TrainStateMode
 from .train_eval import (
     DatasetEvaluation,
@@ -108,12 +123,14 @@ from .train_eval import (
 )
 
 # Concrete adapter surface.
+from .causal_predictive import CausalPredictiveAdapter, CausalPredictiveFitReport, CausalPredictiveScore
 from .model import ByteLatentPredictiveCoder, OpenPredictiveCoder
 
 __all__ = [
     "AdaptiveSegmenter",
     "ArtifactAccounting",
     "ArtifactMetadata",
+    "coerce_artifact_metadata",
     "ByteCodec",
     "ByteLatentFeatureView",
     "ByteLatentPredictiveCoder",
@@ -121,6 +138,12 @@ __all__ = [
     "ByteSequenceDataset",
     "bits_per_byte_from_logits",
     "bits_per_byte_from_probabilities",
+    "CausalFitReport",
+    "CausalPredictiveAdapter",
+    "CausalPredictiveFitReport",
+    "CausalPredictiveScore",
+    "CausalSequenceReport",
+    "CausalTrace",
     "ControllerSummary",
     "ControllerSummaryBuilder",
     "ControllerSummaryConfig",
@@ -162,6 +185,8 @@ __all__ = [
     "LinearMemoryConfig",
     "LinearMemoryFeatureView",
     "LinearMemorySubstrate",
+    "make_artifact_accounting",
+    "make_replay_span",
     "MemoryMergeMode",
     "MixedMemoryConfig",
     "MixedMemorySubstrate",
@@ -203,6 +228,7 @@ __all__ = [
     "SequenceReport",
     "SequenceTrace",
     "score_next_step",
+    "tag_metadata",
     "TransferProbeReport",
     "TransferEvaluation",
     "TokenSubstrate",

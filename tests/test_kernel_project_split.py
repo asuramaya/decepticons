@@ -27,6 +27,7 @@ class KernelProjectSplitTests(unittest.TestCase):
         self.assertTrue(hasattr(opc, "LinearMemorySubstrate"))
         self.assertTrue(hasattr(opc, "LinearMemoryFeatureView"))
         self.assertTrue(hasattr(opc, "FrozenReadoutExpert"))
+        self.assertTrue(hasattr(opc, "CausalPredictiveAdapter"))
         self.assertTrue(hasattr(opc, "bits_per_byte_from_probabilities"))
 
         self.assertFalse(hasattr(opc, "ExpertMixtureModel"))
