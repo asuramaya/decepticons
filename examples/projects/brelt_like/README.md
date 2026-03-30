@@ -1,6 +1,9 @@
 # brelt_like
 
-This folder is a runnable project-layer example anchored to the actual `brelt` repository in `/tmp/brelt_repo`.
+This folder is a runnable project-layer example anchored to the public
+[`guilhhotina/brelt`](https://github.com/guilhhotina/brelt) repository.
+
+It is a reconstruction inside this repo, not a checkout mounted from a temporary directory.
 
 The point is to mirror the real shape, not to reimplement the full training system:
 
@@ -46,9 +49,9 @@ The example is intended as a structural/dev target: enough to test the architect
 From the repository root:
 
 ```bash
-PYTHONPATH=open-predictive-coder/src python3 open-predictive-coder/examples/projects/brelt_like/probe.py
+PYTHONPATH=src python3 examples/projects/brelt_like/probe.py
 ```
 
 ```bash
-PYTHONPATH=open-predictive-coder/src python3 open-predictive-coder/examples/projects/brelt_like/smoke.py
+PYTHONPATH=src python3 examples/projects/brelt_like/smoke.py
 ```

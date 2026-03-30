@@ -2,6 +2,8 @@
 
 This folder is a runnable example project for the kernel layer in `open-predictive-coder`.
 
+It is a reconstruction inside this repo, not a vendored copy of the upstream ancestor code.
+
 It is intentionally small and is meant to act as a development and smoke-test target for the
 `carving_machine`-style idea:
 
@@ -44,11 +46,11 @@ The project has two entry points:
 From the repository root:
 
 ```bash
-PYTHONPATH=open-predictive-coder/src python3 open-predictive-coder/examples/projects/carving_machine_like/smoke.py
+PYTHONPATH=src python3 examples/projects/carving_machine_like/smoke.py
 ```
 
 ```bash
-PYTHONPATH=open-predictive-coder/src python3 open-predictive-coder/examples/projects/carving_machine_like/probe.py
+PYTHONPATH=src python3 examples/projects/carving_machine_like/probe.py
 ```
 
 ## Scope

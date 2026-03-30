@@ -13,6 +13,8 @@ This is the smallest end-to-end package example. It is for basic install and imp
 These are under [`projects/`](./projects). They are the main way the repo tests whether the kernel boundary is drawn
 honestly.
 
+They are self-contained descendants that live in this repo. They are not imports from sibling repositories.
+
 - `carving_machine_like`
   ancestor-style hierarchical descendant
 - `conker_early_like`

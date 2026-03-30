@@ -13,7 +13,8 @@ The repo is explicitly anchored in both literature and the current library lands
 See [`docs/related_work.md`](./docs/related_work.md) for canonical references,
 [`docs/landscape.md`](./docs/landscape.md) for nearby libraries and ecosystem gaps, and
 [`docs/downstream_patterns.md`](./docs/downstream_patterns.md) for the generalized causal/noncausal/oracle/bridge/byte
-pattern language extracted from the sibling projects in this workspace. The current kernel extraction roadmap lives in
+pattern language extracted from related descendants. Use [`docs/lineage.md`](./docs/lineage.md) for source lineage,
+attribution, and the rule this repo follows for non-vendored references. The current kernel extraction roadmap lives in
 [`docs/kernel_matrix.md`](./docs/kernel_matrix.md), the package/code map is in
 [`docs/architecture.md`](./docs/architecture.md), the concrete next implementation pass is in
 [`docs/next_pass.md`](./docs/next_pass.md), and the next controller extraction boundary is outlined in
@@ -52,6 +53,9 @@ The intended line is:
 - `conker`, `blinx`, `giddy-up`, and future descendants: downstream systems that add policy, runtime contracts, and
   task-specific claims
 
+This repo is standalone. The example descendants under [`examples/projects`](./examples/projects) are reconstructions
+built in this repo from the extracted primitives; they are not imported or copied from sibling repositories.
+
 What belongs in the kernel:
 
 - substrate dynamics
@@ -79,21 +83,21 @@ repo, and the public framing is by idea rather than by codename.
 
 - `causal predictive/compressive`:
   strict prefix-only runtime systems with legality audits, artifact-boundary accounting, and memory-first sequence
-  correction. Workspace example: [`conker`](/Users/asuramaya/Code/carving_machine_v3/conker).
+  correction. See the attribution notes in [`docs/lineage.md`](./docs/lineage.md).
 - `noncausal reconstructive`:
   whole-document removal and replay systems that treat the document as a field and make side-data economics central.
-  Workspace example: [`blinx`](/Users/asuramaya/Code/carving_machine_v3/blinx).
+  See the attribution notes in [`docs/lineage.md`](./docs/lineage.md).
 - `oracle analysis`:
   bidirectional analysis passes that estimate structural determinism, small candidate-set size, and future-context
-  uplift, but do not make direct runtime codec claims. Workspace example:
-  [`blinx/conker/docs/BLINX_ORACLE.md`](/Users/asuramaya/Code/carving_machine_v3/blinx/conker/docs/BLINX_ORACLE.md).
+  uplift, but do not make direct runtime codec claims. See the sibling descendant notes in
+  [`docs/lineage.md`](./docs/lineage.md).
 - `bridge export`:
   boundary layers that turn offline oracle findings into strictly causal exported features or replay artifacts.
-  Workspace example: [`giddy-up`](/Users/asuramaya/Code/carving_machine_v3/giddy-up).
+  See the attribution notes in [`docs/lineage.md`](./docs/lineage.md).
 - `byte-latent`:
   byte-visible systems with adaptive patches, shorter internal latent streams, and recurrent latent refinement.
-  This repo is the first reference implementation for that pattern, and `brelt` fits as a downstream adaptation in the
-  same family.
+  This repo is the first reference implementation for that pattern, and the public downstream reference is
+  [`guilhhotina/brelt`](https://github.com/guilhhotina/brelt).
 
 Those patterns illustrate the problem family:
 

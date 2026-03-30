@@ -26,8 +26,8 @@ Project policy that stays local:
 From the repository root:
 
 ```bash
-PYTHONPATH=open-predictive-coder/src python3 open-predictive-coder/examples/projects/oracle_analysis_like/probe.py
-PYTHONPATH=open-predictive-coder/src python3 open-predictive-coder/examples/projects/oracle_analysis_like/smoke.py
+PYTHONPATH=src python3 examples/projects/oracle_analysis_like/probe.py
+PYTHONPATH=src python3 examples/projects/oracle_analysis_like/smoke.py
 ```
 
 ## What It Shows

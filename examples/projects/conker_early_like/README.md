@@ -21,8 +21,8 @@ The example uses the kernel API directly:
 From the repository root:
 
 ```bash
-PYTHONPATH=open-predictive-coder/src python3 open-predictive-coder/examples/projects/conker_early_like/smoke.py
-PYTHONPATH=open-predictive-coder/src python3 open-predictive-coder/examples/projects/conker_early_like/run.py --mode demo
+PYTHONPATH=src python3 examples/projects/conker_early_like/smoke.py
+PYTHONPATH=src python3 examples/projects/conker_early_like/run.py --mode demo
 ```
 
 ## What It Shows

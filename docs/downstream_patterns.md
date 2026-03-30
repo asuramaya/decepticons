@@ -1,8 +1,10 @@
 # Downstream Patterns
 
-This document extracts reusable library shapes from the sibling projects in this workspace, but renames them by idea
-instead of by codename. The goal is to keep `open-predictive-coder` legible as a library surface even if the local
-project names change.
+This document extracts reusable library shapes from related descendant projects, but renames them by idea instead of
+by codename. The goal is to keep `open-predictive-coder` legible as a library surface even if the surrounding project
+names change.
+
+Use [`lineage.md`](./lineage.md) for the attribution rule behind the non-vendored sources named here.
 
 ## Naming Rule
 
@@ -34,9 +36,9 @@ be drawn.
 
 Primary sibling sources:
 
-- [`conker/docs/current_frontier.md`](/Users/asuramaya/Code/carving_machine_v3/conker/docs/current_frontier.md)
-- [`conker/docs/validity.md`](/Users/asuramaya/Code/carving_machine_v3/conker/docs/validity.md)
-- [`conker/docs/negative_results.md`](/Users/asuramaya/Code/carving_machine_v3/conker/docs/negative_results.md)
+- `conker/docs/current_frontier.md`
+- `conker/docs/validity.md`
+- `conker/docs/negative_results.md`
 
 Problem shape:
 
@@ -67,8 +69,8 @@ Key lessons from the docs:
 
 Primary sibling sources:
 
-- [`blinx/README.md`](/Users/asuramaya/Code/carving_machine_v3/blinx/README.md)
-- [`blinx/conker/docs/BLINX6.md`](/Users/asuramaya/Code/carving_machine_v3/blinx/conker/docs/BLINX6.md)
+- `blinx/README.md`
+- `blinx/conker/docs/BLINX6.md`
 
 Problem shape:
 
@@ -98,7 +100,7 @@ Key lessons from the docs:
 
 Primary sibling source:
 
-- [`blinx/conker/docs/BLINX_ORACLE.md`](/Users/asuramaya/Code/carving_machine_v3/blinx/conker/docs/BLINX_ORACLE.md)
+- `blinx/conker/docs/BLINX_ORACLE.md`
 
 Problem shape:
 
@@ -125,8 +127,8 @@ Key lessons from the docs:
 
 Primary sibling sources:
 
-- [`giddy-up/README.md`](/Users/asuramaya/Code/carving_machine_v3/giddy-up/README.md)
-- [`giddy-up/docs/ARCHITECTURE.md`](/Users/asuramaya/Code/carving_machine_v3/giddy-up/docs/ARCHITECTURE.md)
+- `giddy-up/README.md`
+- `giddy-up/docs/ARCHITECTURE.md`
 
 Problem shape:
 
@@ -153,7 +155,7 @@ Primary sources:
 
 - this repo's current implementation
 - the broader `carving_machine` extraction direction
-- `brelt` as a downstream adaptation in the same family
+- [`guilhhotina/brelt`](https://github.com/guilhhotina/brelt) as a downstream adaptation in the same family
 
 Problem shape:
 

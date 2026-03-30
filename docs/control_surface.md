@@ -1,19 +1,21 @@
 # Control Surface
 
 This note anchors the next controller extraction step in the actual `carving_machine` code rather than in repo lore.
+The upstream source coordinates below are attribution notes from the broader workspace, not vendored files in this
+repository. See [`lineage.md`](./lineage.md).
 
 ## Pathway Gates
 
-The first gate surface lives inside [`HierarchicalCarverModel`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L224).
+The first gate surface lives inside `HierarchicalCarverModel` in `carving_machine/models.py#L224`.
 
 Relevant regions:
 
 - config fields and gate heads:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L232)
+  `carving_machine/models.py#L232`
 - gate application helpers:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L306)
+  `carving_machine/models.py#L306`
 - slow-state and surprise-driven gate use in the forward pass:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L350)
+  `carving_machine/models.py#L350`
 
 The reusable idea is smaller than the model:
 
@@ -32,18 +34,18 @@ surprise input and should emit gate values in `[0, 1]`.
 
 ## Routing
 
-The next routing surface lives in [`RoutedHierarchicalModel`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L1129).
+The next routing surface lives in `RoutedHierarchicalModel` in `carving_machine/models.py#L1129`.
 
 Relevant regions:
 
 - router mode setup:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L1208)
+  `carving_machine/models.py#L1208`
 - summary construction for each branch:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L1252)
+  `carving_machine/models.py#L1252`
 - route weight computation:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L1279)
+  `carving_machine/models.py#L1279`
 - route trace collection:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L1290)
+  `carving_machine/models.py#L1290`
 
 The reusable idea is:
 
@@ -62,16 +64,16 @@ should be external inputs.
 
 ## Hormonal Modulation
 
-The modulation surface lives in [`HormonalHierarchicalCarverModel`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L1354).
+The modulation surface lives in `HormonalHierarchicalCarverModel` in `carving_machine/models.py#L1354`.
 
 Relevant regions:
 
 - hormone and gate projection setup:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L1404)
+  `carving_machine/models.py#L1404`
 - hormone-conditioned fast/mid gating:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L1448)
+  `carving_machine/models.py#L1448`
 - optional hormone predictor/readout inclusion:
-  [`models.py`](/Users/asuramaya/Code/carving_machine_v3/carving_machine/models.py#L1464)
+  `carving_machine/models.py#L1464`
 
 The reusable idea is:
 
