@@ -129,6 +129,14 @@ from .probability_diagnostics import (
 )
 from .sampled_readout import SampledBandSummary, SampledMultiscaleReadout
 from .span_selection import ScoredSpan, SpanSelectionConfig, replay_spans_from_scores, select_scored_spans
+from .statistical_backoff import (
+    StatisticalBackoffConfig,
+    StatisticalBackoffFitReport,
+    StatisticalBackoffMemory,
+    StatisticalBackoffPrediction,
+    StatisticalBackoffScore,
+    StatisticalBackoffTrace,
+)
 from .views import ByteLatentFeatureView
 
 # Substrates, factories, and presets.
@@ -353,6 +361,12 @@ __all__ = [
     "SequenceReport",
     "SequenceTrace",
     "score_next_step",
+    "StatisticalBackoffConfig",
+    "StatisticalBackoffFitReport",
+    "StatisticalBackoffMemory",
+    "StatisticalBackoffPrediction",
+    "StatisticalBackoffScore",
+    "StatisticalBackoffTrace",
     "tag_metadata",
     "TeacherExportAdapter",
     "TeacherExportConfig",

@@ -15,16 +15,17 @@ from open_predictive_coder import (
     ExactContextConfig,
     ExactContextMemory,
     ExactContextFitReport,
-    NgramMemory,
     NgramMemoryConfig,
     NgramMemoryReport,
+    StatisticalBackoffConfig,
+    StatisticalBackoffMemory,
     SupportWeightedMixer,
     ensure_tokens,
 )
 
 
 def _coerce_tokens(data: str | bytes | bytearray | memoryview | np.ndarray | Sequence[int]) -> np.ndarray:
-    return ensure_tokens(data).astype(np.uint8, copy=False)
+    return ensure_tokens(data).astype(np.int64, copy=False)
 
 
 @dataclass(frozen=True)
@@ -80,14 +81,17 @@ class StatisticalMemoryTrace:
 class StatisticalMemoryModel:
     def __init__(self, config: StatisticalMemoryConfig | None = None):
         self.config = config or StatisticalMemoryConfig()
-        self.ngram_memory = NgramMemory(
-            NgramMemoryConfig(
-                vocabulary_size=self.config.vocabulary_size,
-                bigram_alpha=self.config.ngram_bigram_alpha,
-                trigram_alpha=self.config.ngram_trigram_alpha,
-                trigram_bucket_count=self.config.ngram_trigram_bucket_count,
+        self.statistical_backoff = StatisticalBackoffMemory(
+            StatisticalBackoffConfig(
+                ngram=NgramMemoryConfig(
+                    vocabulary_size=self.config.vocabulary_size,
+                    bigram_alpha=self.config.ngram_bigram_alpha,
+                    trigram_alpha=self.config.ngram_trigram_alpha,
+                    trigram_bucket_count=self.config.ngram_trigram_bucket_count,
+                )
             )
         )
+        self.ngram_memory = self.statistical_backoff.ngram_memory
         self.exact_memory = ExactContextMemory(
             ExactContextConfig(
                 vocabulary_size=self.config.vocabulary_size,
@@ -106,16 +110,12 @@ class StatisticalMemoryModel:
         data: str | bytes | bytearray | memoryview | np.ndarray | Sequence[int] | Sequence[object],
     ) -> StatisticalMemoryFitReport:
         return StatisticalMemoryFitReport(
-            ngram=self.ngram_memory.fit(data),
+            ngram=self.statistical_backoff.fit(data).ngram,
             exact=self.exact_memory.fit(data),
         )
 
     def _ngram_distribution(self, prefix: np.ndarray) -> np.ndarray:
-        if prefix.size == 0:
-            return self.ngram_memory.unigram_probs()
-        if prefix.size == 1:
-            return self.ngram_memory.bigram_probs(int(prefix[-1]))
-        return self.ngram_memory.trigram_probs(int(prefix[-2]), int(prefix[-1]))
+        return self.statistical_backoff.predict(prefix).highest_order_probs
 
     def _mixed_distribution(
         self,

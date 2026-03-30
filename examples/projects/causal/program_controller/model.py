@@ -15,12 +15,13 @@ from open_predictive_coder import (
     ExactContextConfig,
     ExactContextFitReport,
     ExactContextMemory,
-    NgramMemory,
     NgramMemoryConfig,
     NgramMemoryReport,
     ReplaySpan,
     RidgeReadout,
     SpanSelectionConfig,
+    StatisticalBackoffConfig,
+    StatisticalBackoffMemory,
     ensure_tokens,
     replay_spans_from_scores,
 )
@@ -32,7 +33,7 @@ from open_predictive_coder.probability_diagnostics import (
 
 
 def _coerce_tokens(data: str | bytes | bytearray | memoryview | np.ndarray | Sequence[int]) -> np.ndarray:
-    return ensure_tokens(data).astype(np.uint8, copy=False)
+    return ensure_tokens(data).astype(np.int64, copy=False)
 
 
 def _coerce_sequences(
@@ -165,14 +166,17 @@ class ProgramControllerModel:
 
     def __init__(self, config: ProgramControllerConfig | None = None):
         self.config = config or ProgramControllerConfig()
-        self.ngram_memory = NgramMemory(
-            NgramMemoryConfig(
-                vocabulary_size=self.config.vocabulary_size,
-                bigram_alpha=self.config.ngram_bigram_alpha,
-                trigram_alpha=self.config.ngram_trigram_alpha,
-                trigram_bucket_count=self.config.ngram_trigram_bucket_count,
+        self.statistical_backoff = StatisticalBackoffMemory(
+            StatisticalBackoffConfig(
+                ngram=NgramMemoryConfig(
+                    vocabulary_size=self.config.vocabulary_size,
+                    bigram_alpha=self.config.ngram_bigram_alpha,
+                    trigram_alpha=self.config.ngram_trigram_alpha,
+                    trigram_bucket_count=self.config.ngram_trigram_bucket_count,
+                )
             )
         )
+        self.ngram_memory = self.statistical_backoff.ngram_memory
         self.exact_memory = ExactContextMemory(
             ExactContextConfig(
                 vocabulary_size=self.config.vocabulary_size,
@@ -197,11 +201,7 @@ class ProgramControllerModel:
         return cls(ProgramControllerConfig(**kwargs))
 
     def _ngram_distribution(self, prefix: np.ndarray) -> np.ndarray:
-        if prefix.size == 0:
-            return self.ngram_memory.unigram_probs()
-        if prefix.size == 1:
-            return self.ngram_memory.bigram_probs(int(prefix[-1]))
-        return self.ngram_memory.trigram_probs(int(prefix[-2]), int(prefix[-1]))
+        return self.statistical_backoff.predict(prefix).highest_order_probs
 
     def _exact_distribution(self, prefix: np.ndarray) -> tuple[np.ndarray, float, int]:
         experts = self.exact_memory.experts(prefix)
@@ -266,7 +266,7 @@ class ProgramControllerModel:
         data: str | bytes | bytearray | memoryview | np.ndarray | Sequence[int] | Sequence[object],
     ) -> ProgramControllerFitReport:
         tokens = _coerce_tokens(data)
-        ngram_report = self.ngram_memory.fit(tokens)
+        ngram_report = self.statistical_backoff.fit(tokens).ngram
         exact_report = self.exact_memory.fit(tokens)
 
         if tokens.size < 2:

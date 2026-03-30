@@ -24,9 +24,9 @@ They are self-contained descendants that live in this repo. They are not imports
 - `statistical_memory`
   causal statistical-memory composition example in `projects/causal/`
 - `packed_memory_controller`
-  causal memory-first confidence/controller example in `projects/causal/`
+  causal memory-first confidence/controller example over the shared statistical-backoff layer in `projects/causal/`
 - `program_controller`
-  causal higher-order routing/controller descendant kept project-local in `projects/causal/`
+  causal higher-order routing/controller descendant kept project-local above the shared statistical-backoff layer in `projects/causal/`
 - `proxy_features`
   bridge-style descendant in `projects/bridge/`
 - `feature_export`

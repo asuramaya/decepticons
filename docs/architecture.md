@@ -60,9 +60,9 @@ These are not toy demos. They are boundary tests.
 - `causal/memory_stability/`, `causal/linear_correction/`, `causal/residual_repair/`
   three different causal composition policies built from kernel primitives
 - `causal/statistical_memory/`
-  causal example that composes dense n-gram tables and exact-context repair without widening `src/`
+  causal example that composes the shared statistical-backoff memory layer and exact-context repair
 - `causal/packed_memory_controller/`
-  causal memory-first descendant that adds an example-local trust controller over packed priors and exact repair
+  causal memory-first descendant that adds an example-local trust controller over shared backoff priors and exact repair
 - `bridge/proxy_features/`
   bridge-style descendant that turns probability streams into causal proxy features
 - `bridge/feature_export/`
@@ -127,6 +127,7 @@ The kernel is easiest to understand by category rather than by filename order.
 - [`latents.py`](../src/open_predictive_coder/latents.py)
 - [`learned_segmentation.py`](../src/open_predictive_coder/learned_segmentation.py)
 - [`ngram_memory.py`](../src/open_predictive_coder/ngram_memory.py)
+- [`statistical_backoff.py`](../src/open_predictive_coder/statistical_backoff.py)
 - [`patch_latent_blocks.py`](../src/open_predictive_coder/patch_latent_blocks.py)
 - [`probability_diagnostics.py`](../src/open_predictive_coder/probability_diagnostics.py)
 - [`segmenters.py`](../src/open_predictive_coder/segmenters.py)

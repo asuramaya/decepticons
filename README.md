@@ -164,6 +164,7 @@ This implementation synthesizes ideas from:
 - `SampledMultiscaleReadout`: deterministic banded sampling over multiscale state
 - `ExactContextMemory`: causal exact-history count memory over 1/2/3-step contexts
 - `NgramMemory`: smoothed unigram/bigram/trigram statistical memory primitive
+- `StatisticalBackoffMemory`: fitted global mixture over order-wise n-gram priors with prefix-time fallback semantics
 - `BridgeExportAdapter`: generic export/report surface over paired probability streams
 - `bridge_feature_arrays`: causal proxy features derived from probability arrays
 - `BidirectionalContextProbe`: noncausal context determinism and leave-one-out probe
@@ -243,6 +244,6 @@ kernel were `LinearMemorySubstrate`, `LinearMemoryFeatureView`, `FrozenReadoutEx
 `ArtifactAccounting` runtime slice, the first shared `CausalPredictiveAdapter` plus `OracleAnalysisAdapter` plus
 `BridgeExportAdapter`, the first learned patch-latent kernel blocks (`LearnedSegmenter`, `LocalByteEncoder`,
 `PatchPooler`, `GlobalLocalBridge`), and the next statistical/kernel additions (`OscillatoryMemorySubstrate`,
-`NgramMemory`, `bridge_feature_arrays`, `ProbabilityDiagnostics`, `BidirectionalContextProbe`,
+`NgramMemory`, `StatisticalBackoffMemory`, `bridge_feature_arrays`, `ProbabilityDiagnostics`, `BidirectionalContextProbe`,
 `select_scored_spans`, `replay_spans_from_scores`); descendant mixer policies, noncausal replay economics,
 rate-distortion objectives, and quantization/export policy remain deliberately project-local.

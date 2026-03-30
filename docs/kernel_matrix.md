@@ -73,6 +73,7 @@ Use [`frontier_pass.md`](./frontier_pass.md) for the current descendant-frontier
 | `controllers.learned_segmentation` | reusable learned boundary probability and target-rate patching | learned patch-latent reconstruction from primitives | rate-distortion intuition without transformer-specific policy | Implemented |
 | `memory.exact_context` | causal exact-history experts over exact1/exact2/exact3 style contexts | causal descendant docs and early exact-count branches | count-based language modeling, causal support-aware correction | Implemented |
 | `memory.ngram` | smoothed unigram/bigram/trigram statistical tables | later causal packed-memory descendants | classical n-gram language modeling and lightweight causal memory | Implemented |
+| `memory.statistical_backoff` | fitted global mixture over unigram/bigram/trigram priors with prefix-time fallback semantics | generalized packed-memory descendants rebuilt from primitives | memory-first backoff modeling and lightweight prior mixing | Implemented |
 | `controllers.gating` | reusable fast-to-mid and mid-to-slow pathway gates | `carving_machine/models.py#L224` | adaptive control over multiscale substrate paths | Implemented |
 | `controllers.routing` | causal substrate/path selection over branch summaries | `carving_machine/models.py#L1129` | adaptive control over substrate views | Implemented |
 | `controllers.modulation` | hormone/modulation paths | `carving_machine/models.py#L1354` | side-channel modulation over substrate | Implemented as primitive |
@@ -115,7 +116,7 @@ Use [`frontier_pass.md`](./frontier_pass.md) for the current descendant-frontier
 - rollout evaluation
 - replay-safe reporting
 - packed-artifact and legality hooks
-- memory-first expert/cache interfaces
+- broader memory-first expert/cache interfaces beyond the current statistical backoff layer
 
 ### P2: grow sideways into noncausal and bridge work
 
@@ -148,6 +149,7 @@ The kernel is no longer just an echo-state toy. It now has:
 - hormone modulation primitive
 - exact-context memory and support-weighted blending primitives
 - smoothed n-gram memory primitive
+- fitted statistical backoff layer over order-wise n-gram priors
 - feature-view primitives for both byte-latent and hierarchical state
 - bridge feature utilities over probability arrays
 - family-neutral probability diagnostics over probability arrays
