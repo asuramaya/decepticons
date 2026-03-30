@@ -19,8 +19,8 @@ That vocabulary says what a module is for without requiring knowledge of interna
 
 ## Core Kernel
 
-The `carving_machine` line suggests that the reusable center is not a single branch outcome, but the upstream core from
-which several descendants grow. The kernel is therefore made of:
+The upstream experiment family suggests that the reusable center is not a single branch outcome, but the upstream core
+from which several descendants grow. The kernel is therefore made of:
 
 - substrate dynamics
 - learned side-channels
@@ -153,7 +153,7 @@ Key lessons from the docs:
 Primary sources:
 
 - this repo's current implementation
-- the broader `carving_machine` extraction direction
+- the broader upstream extraction direction
 - public byte-latent downstream repos as adaptations in the same family
 
 Problem shape:

@@ -1,6 +1,6 @@
 # Control Surface
 
-This note anchors the next controller extraction step in the actual `carving_machine` code rather than in repo lore.
+This note anchors the next controller extraction step in the actual upstream controller code rather than in repo lore.
 The upstream source coordinates below are attribution notes from the broader workspace, not vendored files in this
 repository. See [`lineage.md`](./lineage.md).
 
@@ -107,4 +107,4 @@ That means the honest remaining order is now:
 2. keep learned predictor-head policy in example/adapters until repetition forces a wider abstraction
 3. only then consider richer learned controller stacks beyond deterministic kernel primitives
 
-That keeps the kernel idea-based instead of baking `carving_machine` class structure directly into the public API.
+That keeps the kernel idea-based instead of baking upstream class structure directly into the public API.

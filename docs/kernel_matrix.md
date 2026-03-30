@@ -2,27 +2,26 @@
 
 This matrix lays out the kernel-first build order for `open-predictive-coder` using three sources of guidance:
 
-- the `carving_machine` thesis that the reusable center is the literal upstream core from which the downstream systems
-  evolve
+- the upstream workspace thesis that the reusable center is the literal core from which the downstream systems evolve
 - the generalized downstream pattern language in [`downstream_patterns.md`](./downstream_patterns.md)
 - the research anchors in [`related_work.md`](./related_work.md)
 
 The point is not to preserve every historical branch name. The point is to extract the smallest reusable kernel from
-`carving_machine` that can still support causal, noncausal, oracle, bridge, and byte-latent downstream systems.
+the upstream workspace that can still support causal, noncausal, oracle, bridge, and byte-latent downstream systems.
 
 Use [`lineage.md`](./lineage.md) for the attribution rule behind the upstream workspace paths named below.
 
 ## Source Anchors
 
-### `carving_machine`
+### Upstream Workspace
 
-- `README.md#L8` in the upstream `carving_machine` workspace:
+- `README.md#L8` in the upstream workspace:
   the working thesis is a rich substrate plus a learned side-channel and readout
-- `README.md#L21` in the upstream `carving_machine` workspace:
+- `README.md#L21` in the upstream workspace:
   the live fixed-substrate thread is hierarchical and multi-timescale
-- `README.md#L29` in the upstream `carving_machine` workspace:
+- `README.md#L29` in the upstream workspace:
   the harness is meant to compare substrate designs, not just masks
-- `ORIGIN.md#L15` in the upstream `carving_machine` workspace:
+- `ORIGIN.md#L15` in the upstream workspace:
   the original design language was subtraction, predictive coding, and a reservoir plus controller plus readout stack
 
 ### Generalized downstream framing
@@ -53,14 +52,14 @@ Use [`lineage.md`](./lineage.md) for the attribution rule behind the upstream wo
 
 ## Matrix
 
-| Kernel Area | Why It Exists | `carving_machine` source | Research anchor | Current status |
+| Kernel Area | Why It Exists | Upstream source | Research anchor | Current status |
 | --- | --- | --- | --- | --- |
 | `substrates.echo_state` | fixed recurrent baseline substrate | `carving_machine/reservoir.py#L85` | Jaeger 2001, Maass et al. 2002 | Implemented |
 | `substrates.delay` | deterministic fading-memory control line | `carving_machine/models.py#L384` | fading-memory / liquid-state intuition | Implemented |
 | `substrates.linear_memory` | frozen linear multiscale decay-bank memory | linear-correction and residual-repair reconstruction from primitives | short/medium-horizon linear memory scaffold | Implemented |
 | `substrates.mixed_memory` | recurrent plus delay hybrid | `carving_machine/models.py#L484`, `carving_machine/models.py#L609` | sequence memory and continual modeling | Implemented |
 | `substrates.hierarchical` | fast/mid/slow multi-timescale substrate | `carving_machine/models.py#L224` | predictive coding hierarchies, multi-timescale memory | Implemented |
-| `factories.substrates` | config-driven substrate construction and adapter dispatch | `carving_machine` harness principle: compare substrate designs | engineering bridge from research kernel to adapters | Implemented |
+| `factories.substrates` | config-driven substrate construction and adapter dispatch | upstream harness principle: compare substrate designs | engineering bridge from research kernel to adapters | Implemented |
 | `controllers.summary` | generic summary contract shared by gates and routing | `carving_machine/models.py#L224`, `carving_machine/models.py#L1129` | control-side summary views over substrate state | Implemented |
 | `controllers.predictive` | latent commit, prediction, surprise, residual paths | `carving_machine/models.py#L224`, `carving_machine/models.py#L609` | Rao and Ballard 1999, Friston 2005 | Partial: generic predictive/surprise primitive implemented |
 | `memory.exact_context` | causal exact-history experts over exact1/exact2/exact3 style contexts | causal descendant docs and early exact-count branches | count-based language modeling, causal support-aware correction | Implemented |
@@ -110,7 +109,7 @@ Use [`lineage.md`](./lineage.md) for the attribution rule behind the upstream wo
 
 ### P3: only then stabilize presets
 
-- named preset bundles copied from `carving_machine`
+- named preset bundles copied from the upstream workspace
 - compatibility aliases for historical branch names if still useful
 
 ## Current Read
@@ -139,7 +138,7 @@ The kernel is no longer just an echo-state toy. It now has:
 - first shared causal adapter
 - first shared oracle-analysis adapter
 - byte-latent adapter
-- example-project smoke surfaces for `carving_machine`-like and early causal-exact-context builds
+- example-project smoke surfaces for the hierarchical ancestor path and early exact-context repair builds
 - causal mixture/correction/repair replica projects built from primitives
 
 The line to preserve is:
@@ -148,8 +147,8 @@ The line to preserve is:
 - if a choice is really a downstream task policy, legality rule, artifact boundary, or evaluation claim, it does not
   belong here
 
-That is why `carving_machine` remains the main source anchor even now that `src/` contains both `byte-latent` and a
-first `causal_predictive` adapter. The line still matters: descendants can thin around the causal contract without
-forcing descendant-specific policy back into the kernel.
+That is why the upstream workspace remains the main source anchor even now that `src/` contains both `byte-latent`
+and a first `causal_predictive` adapter. The line still matters: descendants can thin around the causal contract
+without forcing descendant-specific policy back into the kernel.
 
 That is enough to justify continuing kernel-first rather than inventing downstream codenames too early.
