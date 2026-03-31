@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "open-predictive-coder"
 version = "0.1.0"
-description = "A small, literature-anchored predictive coding toolkit for byte streams, adaptive patching, and reservoir latents."
+description = "Shared predictive substrate kernel for reusable model primitives and descendant systems."
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -44,4 +44,3 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-

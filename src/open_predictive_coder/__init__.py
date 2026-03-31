@@ -1,15 +1,29 @@
 """Public API for the open_predictive_coder kernel.
 
-The package is intentionally organized in layers:
-
-1. foundational types and configs
-2. reusable kernel primitives for substrates, control, memory, views, readouts, and runtime
-3. the shared adapter layer plus the first concrete byte-latent adapter
+This package is the shared mechanism layer for downstream systems such as
+Chronohorn: reusable substrates, control primitives, memory blocks, readouts,
+lightweight runtime helpers, and backend-neutral family metadata.
 
 The full package map and layer boundary are documented in `docs/architecture.md`.
 """
 
 # Foundation and configuration surfaces.
+from .causal_bank import (
+    CAUSAL_BANK_DETERMINISTIC_SUBSTRATE_SEED,
+    CAUSAL_BANK_FAMILY,
+    CAUSAL_BANK_FAMILY_ID,
+    CAUSAL_BANK_INPUT_PROJ_SCHEMES,
+    CAUSAL_BANK_OSCILLATORY_SCHEDULES,
+    CAUSAL_BANK_READOUT_KINDS,
+    CAUSAL_BANK_VARIANTS,
+    CausalBankConfig,
+    CausalBankFamilySpec,
+    apply_variant as apply_causal_bank_variant,
+    build_linear_bank as build_causal_bank_linear_bank,
+    osc_pair_count as causal_bank_osc_pair_count,
+    scale_config as scale_causal_bank_config,
+    validate_config as validate_causal_bank_config,
+)
 from .artifacts import (
     ArtifactAccounting,
     ArtifactMetadata,
@@ -210,7 +224,19 @@ __all__ = [
     "ArtifactAuditSummary",
     "ArtifactMetadata",
     "audit_artifact",
+    "apply_causal_bank_variant",
     "coerce_artifact_metadata",
+    "build_causal_bank_linear_bank",
+    "CAUSAL_BANK_DETERMINISTIC_SUBSTRATE_SEED",
+    "CAUSAL_BANK_FAMILY",
+    "CAUSAL_BANK_FAMILY_ID",
+    "CAUSAL_BANK_INPUT_PROJ_SCHEMES",
+    "CAUSAL_BANK_OSCILLATORY_SCHEDULES",
+    "CAUSAL_BANK_READOUT_KINDS",
+    "CAUSAL_BANK_VARIANTS",
+    "causal_bank_osc_pair_count",
+    "CausalBankConfig",
+    "CausalBankFamilySpec",
     "ByteCodec",
     "ensure_byte_tokens",
     "ByteLatentFeatureView",
@@ -245,6 +271,7 @@ __all__ = [
     "ControllerSummary",
     "ControllerSummaryBuilder",
     "ControllerSummaryConfig",
+    "scale_causal_bank_config",
     "SubstrateKind",
     "create_delay_line_substrate",
     "create_echo_state_substrate",
@@ -396,5 +423,6 @@ __all__ = [
     "SummaryRouter",
     "TrainModeConfig",
     "TrainStateMode",
+    "validate_causal_bank_config",
     "replay_spans_from_scores",
 ]
