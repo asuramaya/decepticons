@@ -70,6 +70,9 @@ class CausalBankConfig:
     state_dim: int = 0  # selective scan state dim (0 = use linear_modes, >0 = compressed state)
     num_heads: int = 1  # multi-head state (each head runs independent scan)
     patch_size: int = 1  # byte-to-patch grouping (1 = raw bytes, >1 = patch encoding)
+    num_hemispheres: int = 1  # 1=uniform, 2=fast/slow split
+    fast_hemisphere_ratio: float = 0.25  # fraction of state_dim for fast hemisphere
+    fast_lr_mult: float = 4.0  # learning rate multiplier for fast hemisphere params
 
 
 @dataclass(frozen=True)
@@ -136,6 +139,12 @@ def validate_config(config: CausalBankConfig) -> None:
         raise ValueError("causal-bank state_dim must be divisible by num_heads.")
     if config.patch_size < 1:
         raise ValueError("causal-bank patch_size must be >= 1.")
+    if config.num_hemispheres not in (1, 2):
+        raise ValueError("causal-bank num_hemispheres must be 1 or 2.")
+    if config.fast_hemisphere_ratio <= 0 or config.fast_hemisphere_ratio >= 1:
+        raise ValueError("causal-bank fast_hemisphere_ratio must be in (0, 1).")
+    if config.fast_lr_mult <= 0:
+        raise ValueError("causal-bank fast_lr_mult must be positive.")
 
 
 def learnable_substrate_keys(config: CausalBankConfig) -> tuple[str, ...]:
