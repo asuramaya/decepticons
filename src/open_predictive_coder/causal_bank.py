@@ -22,7 +22,7 @@ CAUSAL_BANK_OSCILLATORY_SCHEDULES = (
     "mincorr_greedy",
     "period_bucket_greedy",
 )
-CAUSAL_BANK_READOUT_KINDS = ("mlp", "tied_recursive", "routed_sqrelu_experts")
+CAUSAL_BANK_READOUT_KINDS = ("mlp", "tied_recursive", "routed_sqrelu_experts", "recurrent")
 CAUSAL_BANK_INPUT_PROJ_SCHEMES = ("random", "orthogonal_rows", "split_banks", "kernel_energy")
 
 
