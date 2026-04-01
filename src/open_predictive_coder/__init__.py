@@ -120,6 +120,7 @@ from open_predictive_coder.memory_protocol import (
     MemoryAttachmentConfig,
 )
 from .ngram_memory import NgramMemory, NgramMemoryConfig, NgramMemoryReport
+from .online_memory import OnlineCausalMemory, OnlineMemoryConfig
 from .noncausal_reconstructive import (
     NoncausalReconstructiveAdapter,
     NoncausalReconstructiveConfig,
@@ -338,6 +339,8 @@ __all__ = [
     "NgramMemory",
     "NgramMemoryConfig",
     "NgramMemoryReport",
+    "OnlineCausalMemory",
+    "OnlineMemoryConfig",
     "NoncausalReconstructiveAdapter",
     "NoncausalReconstructiveConfig",
     "NoncausalReconstructiveFitReport",
