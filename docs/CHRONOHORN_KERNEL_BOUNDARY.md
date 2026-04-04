@@ -100,6 +100,18 @@ The kernel should only carry mechanisms.
 - legality claim promotion
 - runtime claim arbitration
 
+## Dependency Direction (Hard Rule)
+
+```
+decepticons ──→ numpy (only)
+chronohorn ──→ decepticons
+chronohorn ──→ numpy, torch/mlx, sentencepiece, ...
+```
+
+**decepticons never imports chronohorn.** Not in source, not in tests, not in examples. This is the firewall that prevents import cycles. Decepticons tests use their own minimal harnesses — they never reach for chronohorn's training infrastructure, fleet management, or experiment tracking.
+
+If a decepticons test needs to verify a primitive works in a training loop, it builds its own 10-line loop. It does not import a chronohorn trainer.
+
 ## Explicit Non-Goals
 
 This boundary is not trying to make OPC into a full training system.
