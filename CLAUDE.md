@@ -44,7 +44,7 @@ The workstream integration tests (`test_workstream_integration.py`) require `tor
 
 ## Code Conventions
 
-- `numpy>=1.26` is the only hard dependency. torch and mlx are optional.
+- `numpy>=1.26` is the only hard dependency for the kernel. `models/` requires torch or mlx.
 - Backend-specific code goes in `models/`. Backend-neutral code goes in the top-level package.
 - Config dataclasses are frozen (`@dataclass(frozen=True)`).
 - Deterministic substrate construction uses `CAUSAL_BANK_DETERMINISTIC_SUBSTRATE_SEED = 42`.
