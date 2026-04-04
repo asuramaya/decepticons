@@ -39,8 +39,40 @@ Repository = "https://github.com/asuramaya/decepticons"
 [project.scripts]
 opc = "decepticons.cli:main"
 
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle errors
+  "F",    # pyflakes
+  "I",    # isort
+  "UP",   # pyupgrade
+  "B",    # flake8-bugbear
+  "SIM",  # flake8-simplify
+  "S",    # flake8-bandit (security)
+]
+ignore = [
+  "E501",   # line length (handled by formatter)
+  "S101",   # assert in non-test code
+  "B905",   # zip without strict
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S106"]
