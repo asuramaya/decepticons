@@ -266,9 +266,7 @@ class CausalBankModel(nn.Module):
             )
             self._fallback_readout = nn.Linear(trust_input_dim, vocab_size)
 
-            # ngram_table is injected via set_ngram_table() after construction.
-            # decepticons does NOT import chronohorn.
-            self._ngram_table = None
+            self._ngram_table = None  # injected via set_ngram_table()
 
         # Online causal memory (only useful with the linear path)
         self._use_online_memory = (
@@ -663,11 +661,7 @@ class CausalBankModel(nn.Module):
         return self.local_readout(stacked)
 
     def set_ngram_table(self, table) -> None:
-        """Inject an n-gram table for trust-routing mode.
-
-        Called by the training stack after construction. Keeps decepticons
-        free from chronohorn imports.
-        """
+        """Inject an n-gram table for trust-routing mode."""
         self._ngram_table = table
 
     def forward(self, chars: torch.Tensor) -> torch.Tensor:
