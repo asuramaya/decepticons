@@ -12,16 +12,18 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 PROJECT = ROOT / "examples/projects/causal/packed_memory_controller"
-if str(PROJECT) not in sys.path:
-    sys.path.insert(0, str(PROJECT))
 
 from decepticons.probability_diagnostics import (
     ProbabilityDiagnosticsConfig,
     probability_diagnostics,
 )
-import model as packed_memory_controller_model
 
-PackedMemoryControllerModel = packed_memory_controller_model.PackedMemoryControllerModel
+import importlib.util
+_spec = importlib.util.spec_from_file_location("packed_memory_controller_model", PROJECT / "model.py")
+_mod = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _mod
+_spec.loader.exec_module(_mod)
+PackedMemoryControllerModel = _mod.PackedMemoryControllerModel
 
 
 class PackedMemoryControllerExampleTests(unittest.TestCase):

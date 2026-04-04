@@ -10,10 +10,13 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 PROJECT = ROOT / "examples/projects/noncausal/field_reconstruction"
-if str(PROJECT) not in sys.path:
-    sys.path.insert(0, str(PROJECT))
 
-from model import FieldReconstructionModel
+import importlib.util
+_spec = importlib.util.spec_from_file_location("field_reconstruction_model", PROJECT / "model.py")
+_mod = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _mod
+_spec.loader.exec_module(_mod)
+FieldReconstructionModel = _mod.FieldReconstructionModel
 
 
 class FieldReconstructionExampleTests(unittest.TestCase):
