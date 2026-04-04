@@ -40,6 +40,12 @@ Repository = "https://github.com/asuramaya/decepticons"
 opc = "decepticons.cli:main"
 
 [project.optional-dependencies]
+torch = [
+  "torch>=2.0",
+]
+metal = [
+  "mlx>=0.25",
+]
 test = [
   "pytest>=8.0",
 ]
