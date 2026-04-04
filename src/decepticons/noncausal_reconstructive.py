@@ -155,7 +155,7 @@ class NoncausalReconstructiveAdapter:
         )
 
     @classmethod
-    def build(cls, **kwargs: object) -> "NoncausalReconstructiveAdapter":
+    def build(cls, **kwargs: object) -> NoncausalReconstructiveAdapter:
         return cls(NoncausalReconstructiveConfig(**kwargs))
 
     def fit(
@@ -220,7 +220,7 @@ class NoncausalReconstructiveAdapter:
         agreement_mask: list[bool] = []
         replay_mask: list[bool] = []
 
-        for position, token in enumerate(tokens):
+        for position, _token in enumerate(tokens):
             left_probs, right_probs, blended_probs = self._distributions_for_position(tokens, position)
             left_rows.append(left_probs)
             right_rows.append(right_probs)

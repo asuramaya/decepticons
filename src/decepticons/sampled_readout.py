@@ -74,10 +74,7 @@ class SampledMultiscaleReadout:
             mean = float(np.mean(band_state))
             energy = float(np.mean(np.square(band_state)))
             if band.include_drift:
-                if previous is None:
-                    drift = 0.0
-                else:
-                    drift = float(np.mean(np.abs(band_state - previous[band_slice])))
+                drift = 0.0 if previous is None else float(np.mean(np.abs(band_state - previous[band_slice])))
             else:
                 drift = 0.0
             summaries.append(

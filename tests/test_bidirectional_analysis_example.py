@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = REPO_ROOT / "examples" / "projects" / "oracle" / "bidirectional_analysis"
@@ -11,8 +11,9 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from decepticons import ByteCodec, OracleAnalysisAdapter, TrainModeConfig  # noqa: E402
 from model import BidirectionalAnalysisConfig, BidirectionalAnalysisModel  # noqa: E402
+
+from decepticons import ByteCodec, OracleAnalysisAdapter, TrainModeConfig  # noqa: E402
 
 
 class BidirectionalAnalysisExampleTests(unittest.TestCase):

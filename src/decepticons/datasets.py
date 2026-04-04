@@ -14,11 +14,11 @@ class ByteSequenceDataset:
     sequences: tuple[np.ndarray, ...]
 
     @classmethod
-    def from_items(cls, items: Iterable[str | bytes | bytearray | memoryview | np.ndarray | Sequence[int]]) -> "ByteSequenceDataset":
+    def from_items(cls, items: Iterable[str | bytes | bytearray | memoryview | np.ndarray | Sequence[int]]) -> ByteSequenceDataset:
         return cls(tuple(ensure_tokens(item) for item in items))
 
     @classmethod
-    def from_paths(cls, paths: Iterable[str | Path], encoding: str = "utf-8") -> "ByteSequenceDataset":
+    def from_paths(cls, paths: Iterable[str | Path], encoding: str = "utf-8") -> ByteSequenceDataset:
         sequences = []
         for path in paths:
             text = Path(path).read_text(encoding=encoding)

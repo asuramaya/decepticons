@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import fields
 import unittest
+from dataclasses import fields
 
 import decepticons as opc
 from decepticons.bidirectional_context import BidirectionalContextConfig, BidirectionalContextStats
@@ -21,9 +21,8 @@ class BoundarySurfaceTests(unittest.TestCase):
             BidirectionalContextConfig(),
             NgramMemoryConfig(),
         ):
-            with self.subTest(config_type=type(config).__name__):
-                with self.assertRaises(TypeError):
-                    create_substrate(config)
+            with self.subTest(config_type=type(config).__name__), self.assertRaises(TypeError):
+                create_substrate(config)
 
     def test_causal_reports_do_not_absorb_bridge_or_right_context_fields(self) -> None:
         fit_fields = _field_names(opc.CausalPredictiveFitReport)

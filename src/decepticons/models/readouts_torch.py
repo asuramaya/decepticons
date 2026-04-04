@@ -2,11 +2,11 @@ from __future__ import annotations
 
 """Torch readout modules for Chronohorn descendant models."""
 
+from typing import Any
+
 import numpy as np
 import torch
 from torch import nn
-
-from typing import Any
 
 from .common import _rng_for, _xavier_uniform
 

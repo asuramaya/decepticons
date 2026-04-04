@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import unittest
-
-from pathlib import Path
 import sys
+import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -12,6 +11,7 @@ if str(SRC) not in sys.path:
 PROJECT = ROOT / "examples/projects/noncausal/field_reconstruction"
 
 import importlib.util
+
 _spec = importlib.util.spec_from_file_location("field_reconstruction_model", PROJECT / "model.py")
 _mod = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _mod

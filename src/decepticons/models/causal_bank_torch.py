@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
 
 import numpy as np
 import torch
 from torch import nn
 
-from .common import _embedding_uniform, _rng_for, _xavier_uniform
 from decepticons.causal_bank import (
     CausalBankConfig,
     build_linear_bank,
@@ -16,9 +14,11 @@ from decepticons.causal_bank import (
     scale_config,
     validate_config,
 )
+
+from .common import _embedding_uniform, _rng_for, _xavier_uniform
 from .readouts_torch import (
-    GRUReadout,
     MLP,
+    GRUReadout,
     RoutedSquaredReLUReadout,
     TiedRecursiveReadout,
     _copy_embedding_,
@@ -312,7 +312,7 @@ class CausalBankModel(nn.Module):
 
     def param_groups(self, base_lr: float) -> list[dict]:
         """Return parameter groups with per-hemisphere learning rates."""
-        if not getattr(self, '_num_hemispheres', 1) == 2 or not self._use_selective_scan:
+        if getattr(self, '_num_hemispheres', 1) != 2 or not self._use_selective_scan:
             return [{"params": list(self.parameters()), "lr": base_lr}]
 
         fast_params = []
@@ -458,7 +458,7 @@ class CausalBankModel(nn.Module):
         C = self._ssm_C(x_embed)  # [batch, seq, state_dim]
 
         # Discretize A: exp(A_log) where A_log < 0 gives decay in (0, 1)
-        A = torch.exp(self._ssm_A.to(dtype=dtype))  # [state_dim]
+        torch.exp(self._ssm_A.to(dtype=dtype))  # [state_dim]
 
         # Parallel chunked scan (same pattern as gated recurrence)
         K = min(32, seq_len)
@@ -758,7 +758,7 @@ class CausalBankModel(nn.Module):
                 states[:, :-1, :],
             ], dim=1)  # [batch, n_patches, modes]
             upsampled_states = shifted.repeat_interleave(P, dim=1)  # [batch, seq, modes]
-            upsampled_embed = encoded.repeat_interleave(P, dim=1)[:, :seq_len, :]
+            encoded.repeat_interleave(P, dim=1)[:, :seq_len, :]
 
             # Patch-level features per byte position
             features = torch.cat([upsampled_states, embed], dim=-1)

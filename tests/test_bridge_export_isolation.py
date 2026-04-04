@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import fields
 import unittest
+from dataclasses import fields
 
 from decepticons import (
     ByteCodec,

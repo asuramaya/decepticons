@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import unittest
-
-from pathlib import Path
 import sys
+import unittest
+from pathlib import Path
 
 import numpy as np
 
@@ -13,12 +12,13 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 PROJECT = ROOT / "examples/projects/causal/packed_memory_controller"
 
+import importlib.util
+
 from decepticons.probability_diagnostics import (
     ProbabilityDiagnosticsConfig,
     probability_diagnostics,
 )
 
-import importlib.util
 _spec = importlib.util.spec_from_file_location("packed_memory_controller_model", PROJECT / "model.py")
 _mod = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = _mod

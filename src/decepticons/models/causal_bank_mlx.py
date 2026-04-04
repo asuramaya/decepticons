@@ -1,20 +1,22 @@
 from __future__ import annotations
 
+import contextlib
 import math
 
 import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 
-from .common import _embedding_uniform, _rng_for, _xavier_uniform
-from .readouts_mlx import MLP, RoutedSquaredReLUReadout, TiedRecursiveReadout
 from decepticons.causal_bank import (
     CausalBankConfig,
+    _kernel_from_decays,
     build_linear_bank,
     osc_pair_count,
-    scale_config,
     validate_config,
 )
+
+from .common import _embedding_uniform, _rng_for, _xavier_uniform
+from .readouts_mlx import MLP, RoutedSquaredReLUReadout, TiedRecursiveReadout
 
 _MISSING = object()
 
@@ -52,10 +54,8 @@ class _ModuleLike(dict):
             return
         if _is_mx_array(val) or isinstance(val, (dict, list, tuple)) or _is_module_like(val):
             if hasattr(self, key) and key not in self:
-                try:
+                with contextlib.suppress(AttributeError):
                     delattr(self, key)
-                except AttributeError:
-                    pass
             self[key] = val
         else:
             super().__setattr__(key, val)
@@ -130,11 +130,7 @@ class _ModuleLike(dict):
                         new_value = params[key]
                         if _is_module_like(current_value):
                             current_value.update(new_value, strict=strict)
-                        elif isinstance(current_value, dict):
-                            apply(current_value, new_value)
-                        elif isinstance(current_value, list):
-                            apply(current_value, new_value)
-                        elif isinstance(current_value, tuple):
+                        elif isinstance(current_value, (dict, list, tuple)):
                             apply(current_value, new_value)
                         else:
                             if strict and not _is_mx_array(new_value):
@@ -157,11 +153,7 @@ class _ModuleLike(dict):
                     new_value = params[index]
                     if _is_module_like(current_value):
                         current_value.update(new_value, strict=strict)
-                    elif isinstance(current_value, dict):
-                        apply(current_value, new_value)
-                    elif isinstance(current_value, list):
-                        apply(current_value, new_value)
-                    elif isinstance(current_value, tuple):
+                    elif isinstance(current_value, (dict, list, tuple)):
                         apply(current_value, new_value)
                     else:
                         if strict and not _is_mx_array(new_value):
@@ -183,11 +175,7 @@ class _ModuleLike(dict):
                     new_value = params[index]
                     if _is_module_like(current_value):
                         current_value.update(new_value, strict=strict)
-                    elif isinstance(current_value, dict):
-                        apply(current_value, new_value)
-                    elif isinstance(current_value, list):
-                        apply(current_value, new_value)
-                    elif isinstance(current_value, tuple):
+                    elif isinstance(current_value, (dict, list, tuple)):
                         apply(current_value, new_value)
                     else:
                         if strict and not _is_mx_array(new_value):

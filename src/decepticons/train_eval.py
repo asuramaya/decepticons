@@ -157,9 +157,9 @@ def evaluate_dataset(
 
     for sequence in sequences:
         report = model.score(sequence)
-        tokens = int(getattr(report, "tokens"))
+        tokens = int(report.tokens)
         effective_tokens = max(tokens - 1, 0)
-        bits_per_byte = float(getattr(report, "bits_per_byte"))
+        bits_per_byte = float(report.bits_per_byte)
         sequence_scores.append(bits_per_byte)
         total_tokens += tokens
         total_effective_tokens += effective_tokens
@@ -194,10 +194,7 @@ def evaluate_rollout_curve(
     if prompt_tokens.size < 1:
         raise ValueError("prompt must contain at least one token")
 
-    if continuation is not None:
-        target_tokens = ensure_tokens(continuation)
-    else:
-        target_tokens = np.asarray([], dtype=np.uint8)
+    target_tokens = ensure_tokens(continuation) if continuation is not None else np.asarray([], dtype=np.uint8)
 
     if mode == "teacher_forced":
         if target_tokens.size == 0:

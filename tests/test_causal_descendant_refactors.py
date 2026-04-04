@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from importlib import util
 import os
-from pathlib import Path
 import subprocess
 import sys
 import unittest
+from importlib import util
+from pathlib import Path
 
 from decepticons import (
     ExactContextMemory,
@@ -14,7 +14,6 @@ from decepticons import (
     OscillatoryMemorySubstrate,
     SupportWeightedMixer,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

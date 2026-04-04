@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from importlib import util
 import inspect
-from pathlib import Path
 import sys
 import unittest
+from importlib import util
+from pathlib import Path
 
 import decepticons as opc
-
 
 PROJECTS_ROOT = Path(__file__).resolve().parents[1] / "examples" / "projects"
 

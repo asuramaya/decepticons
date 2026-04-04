@@ -8,6 +8,36 @@ The full package map and layer boundary are documented in `docs/architecture.md`
 """
 
 # Foundation and configuration surfaces.
+from decepticons.memory_protocol import (
+    MEMORY_KINDS,
+    MemoryAttachmentConfig,
+)
+
+from .artifacts import (
+    ArtifactAccounting,
+    ArtifactMetadata,
+    ReplaySpan,
+    coerce_artifact_metadata,
+    make_artifact_accounting,
+    make_replay_span,
+)
+from .artifacts_audits import ArtifactAuditRecord, ArtifactAuditSummary, audit_artifact, summarize_artifact_audits
+
+# Memory, latent, and feature-view primitives.
+from .bidirectional_context import (
+    BidirectionalContextConfig,
+    BidirectionalContextLeaveOneOutStats,
+    BidirectionalContextNeighborhood,
+    BidirectionalContextProbe,
+    BidirectionalContextStats,
+)
+from .bridge_export import (
+    BridgeExportAdapter,
+    BridgeExportConfig,
+    BridgeExportFitReport,
+    BridgeExportReport,
+)
+from .bridge_features import BridgeFeatureArrays, BridgeFeatureConfig, bridge_feature_arrays
 from .causal_bank import (
     CAUSAL_BANK_DETERMINISTIC_SUBSTRATE_SEED,
     CAUSAL_BANK_FAMILY,
@@ -18,22 +48,28 @@ from .causal_bank import (
     CAUSAL_BANK_VARIANTS,
     CausalBankConfig,
     CausalBankFamilySpec,
+)
+from .causal_bank import (
     apply_variant as apply_causal_bank_variant,
+)
+from .causal_bank import (
     build_linear_bank as build_causal_bank_linear_bank,
+)
+from .causal_bank import (
     learnable_substrate_keys as learnable_causal_bank_substrate_keys,
+)
+from .causal_bank import (
     osc_pair_count as causal_bank_osc_pair_count,
+)
+from .causal_bank import (
     scale_config as scale_causal_bank_config,
+)
+from .causal_bank import (
     validate_config as validate_causal_bank_config,
 )
-from .artifacts import (
-    ArtifactAccounting,
-    ArtifactMetadata,
-    coerce_artifact_metadata,
-    make_artifact_accounting,
-    make_replay_span,
-    ReplaySpan,
-)
-from .artifacts_audits import ArtifactAuditRecord, ArtifactAuditSummary, audit_artifact, summarize_artifact_audits
+
+# Concrete adapter surface.
+from .causal_predictive import CausalPredictiveAdapter, CausalPredictiveFitReport, CausalPredictiveScore
 from .codecs import ByteCodec, ensure_byte_tokens, ensure_tokens
 from .config import (
     ByteLatentPredictiveCoderConfig,
@@ -44,8 +80,8 @@ from .config import (
     LinearMemoryConfig,
     MemoryMergeMode,
     MixedMemoryConfig,
-    OscillatoryMemoryConfig,
     OpenPredictiveCoderConfig,
+    OscillatoryMemoryConfig,
     ReservoirConfig,
     ReservoirTopology,
     SampledReadoutBandConfig,
@@ -67,33 +103,10 @@ from .controllers import (
     PredictiveObservation,
     PredictiveState,
 )
-from .gating import PathwayGateConfig, PathwayGateController, PathwayGateState, PathwayGateValues
-from .modulation import HormoneModulationConfig, HormoneModulator, HormoneState
-from .oracle_analysis import (
-    OracleAnalysisAdapter,
-    OracleAnalysisConfig,
-    OracleAnalysisFitReport,
-    OracleAnalysisPoint,
-    OracleAnalysisReport,
-)
-from .predictive_surprise import PredictionState, PredictiveSurpriseConfig, PredictiveSurpriseController, SummaryMode
-from .routing import RoutingConfig, RoutingDecision, RoutingMode, SummaryRouter
 
-# Memory, latent, and feature-view primitives.
-from .bidirectional_context import (
-    BidirectionalContextConfig,
-    BidirectionalContextLeaveOneOutStats,
-    BidirectionalContextNeighborhood,
-    BidirectionalContextProbe,
-    BidirectionalContextStats,
-)
-from .bridge_export import (
-    BridgeExportAdapter,
-    BridgeExportConfig,
-    BridgeExportFitReport,
-    BridgeExportReport,
-)
-from .bridge_features import BridgeFeatureArrays, BridgeFeatureConfig, bridge_feature_arrays
+# Readouts, experts, datasets, and runtime surfaces.
+from .datasets import ByteSequenceDataset
+from .eval import NextStepScore, RolloutEvaluation, RolloutMode, evaluate_rollout, score_next_step
 from .exact_context import (
     ExactContextConfig,
     ExactContextFitReport,
@@ -103,6 +116,20 @@ from .exact_context import (
     SupportMixConfig,
     SupportWeightedMixer,
 )
+from .experts import ExpertFitReport, ExpertScore, FrozenReadoutExpert
+
+# Substrates, factories, and presets.
+from .factories import (
+    create_delay_line_substrate,
+    create_echo_state_substrate,
+    create_hierarchical_substrate,
+    create_mixed_memory_substrate,
+    create_oscillatory_memory_substrate,
+    create_substrate,
+    create_substrate_for_model,
+)
+from .gating import PathwayGateConfig, PathwayGateController, PathwayGateState, PathwayGateValues
+from .hierarchical_views import HierarchicalFeatureView, HierarchicalSummary
 from .latents import LatentCommitter, LatentObservation, LatentState
 from .learned_segmentation import (
     BoundaryDecision,
@@ -112,21 +139,31 @@ from .learned_segmentation import (
     LearnedSegmenter,
     LearnedSegmenterConfig,
 )
-from .hierarchical_views import HierarchicalFeatureView, HierarchicalSummary
 from .linear_views import LinearMemoryFeatureView
 from .memory_cache import ExactContextCache, MemoryPredictionRecord, MemoryPredictionSummary, StatisticalBackoffCache
-from decepticons.memory_protocol import (
-    MEMORY_KINDS,
-    MemoryAttachmentConfig,
+from .metrics import (
+    bits_per_byte_from_logits,
+    bits_per_byte_from_probabilities,
+    bits_per_token_from_logits,
+    bits_per_token_from_probabilities,
 )
+from .model import ByteLatentPredictiveCoder, OpenPredictiveCoder
+from .modulation import HormoneModulationConfig, HormoneModulator, HormoneState
 from .ngram_memory import NgramMemory, NgramMemoryConfig, NgramMemoryReport
-from .online_memory import OnlineCausalMemory, OnlineMemoryConfig
 from .noncausal_reconstructive import (
     NoncausalReconstructiveAdapter,
     NoncausalReconstructiveConfig,
     NoncausalReconstructiveFitReport,
     NoncausalReconstructiveReport,
     NoncausalReconstructiveTrace,
+)
+from .online_memory import OnlineCausalMemory, OnlineMemoryConfig
+from .oracle_analysis import (
+    OracleAnalysisAdapter,
+    OracleAnalysisConfig,
+    OracleAnalysisFitReport,
+    OracleAnalysisPoint,
+    OracleAnalysisReport,
 )
 from .patch_latent_blocks import (
     GlobalLocalBridge,
@@ -136,6 +173,8 @@ from .patch_latent_blocks import (
     PatchPooler,
     PatchPoolerConfig,
 )
+from .predictive_surprise import PredictionState, PredictiveSurpriseConfig, PredictiveSurpriseController, SummaryMode
+from .presets import delay_small, echo_state_small, hierarchical_small, mixed_memory_small
 from .probability_diagnostics import (
     ProbabilityDiagnostics,
     ProbabilityDiagnosticsConfig,
@@ -148,51 +187,8 @@ from .probability_diagnostics import (
     top2_margin,
     top_k_mass,
 )
-from .sampled_readout import SampledBandSummary, SampledMultiscaleReadout
-from .span_selection import ScoredSpan, SpanSelectionConfig, replay_spans_from_scores, select_scored_spans
-from .statistical_backoff import (
-    StatisticalBackoffConfig,
-    StatisticalBackoffFitReport,
-    StatisticalBackoffMemory,
-    StatisticalBackoffPrediction,
-    StatisticalBackoffScore,
-    StatisticalBackoffTrace,
-)
-from .views import ByteLatentFeatureView
-
-# Substrates, factories, and presets.
-from .factories import (
-    create_delay_line_substrate,
-    create_echo_state_substrate,
-    create_hierarchical_substrate,
-    create_mixed_memory_substrate,
-    create_oscillatory_memory_substrate,
-    create_substrate,
-    create_substrate_for_model,
-)
-from .presets import delay_small, echo_state_small, hierarchical_small, mixed_memory_small
-from .segmenters import AdaptiveSegmenter, SegmentStats
-from .substrates import (
-    DelayLineSubstrate,
-    EchoStateSubstrate,
-    HierarchicalSubstrate,
-    LinearMemorySubstrate,
-    MixedMemorySubstrate,
-    OscillatoryMemorySubstrate,
-    TokenSubstrate,
-)
-
-# Readouts, experts, datasets, and runtime surfaces.
-from .datasets import ByteSequenceDataset
-from .eval import NextStepScore, RolloutEvaluation, RolloutMode, evaluate_rollout, score_next_step
-from .experts import ExpertFitReport, ExpertScore, FrozenReadoutExpert
-from .metrics import (
-    bits_per_byte_from_logits,
-    bits_per_byte_from_probabilities,
-    bits_per_token_from_logits,
-    bits_per_token_from_probabilities,
-)
 from .readouts import RidgeReadout
+from .routing import RoutingConfig, RoutingDecision, RoutingMode, SummaryRouter
 from .runtime import (
     CausalFitReport,
     CausalSequenceReport,
@@ -202,13 +198,33 @@ from .runtime import (
     SequenceTrace,
     tag_metadata,
 )
-from .train_modes import TrainModeConfig, TrainStateMode
+from .sampled_readout import SampledBandSummary, SampledMultiscaleReadout
+from .segmenters import AdaptiveSegmenter, SegmentStats
+from .span_selection import ScoredSpan, SpanSelectionConfig, replay_spans_from_scores, select_scored_spans
+from .statistical_backoff import (
+    StatisticalBackoffConfig,
+    StatisticalBackoffFitReport,
+    StatisticalBackoffMemory,
+    StatisticalBackoffPrediction,
+    StatisticalBackoffScore,
+    StatisticalBackoffTrace,
+)
+from .substrates import (
+    DelayLineSubstrate,
+    EchoStateSubstrate,
+    HierarchicalSubstrate,
+    LinearMemorySubstrate,
+    MixedMemorySubstrate,
+    OscillatoryMemorySubstrate,
+    TokenSubstrate,
+)
+from .teacher_export import TeacherExportAdapter, TeacherExportConfig, TeacherExportRecord, TeacherExportReport
 from .train_eval import (
     DatasetEvaluation,
     RolloutCheckpoint,
     RolloutCurve,
-    RolloutCurveMode,
     RolloutCurveEvaluation,
+    RolloutCurveMode,
     RolloutCurvePoint,
     TransferEvaluation,
     TransferProbeReport,
@@ -217,11 +233,8 @@ from .train_eval import (
     evaluate_transfer_probe,
     score_dataset,
 )
-
-# Concrete adapter surface.
-from .causal_predictive import CausalPredictiveAdapter, CausalPredictiveFitReport, CausalPredictiveScore
-from .model import ByteLatentPredictiveCoder, OpenPredictiveCoder
-from .teacher_export import TeacherExportAdapter, TeacherExportConfig, TeacherExportRecord, TeacherExportReport
+from .train_modes import TrainModeConfig, TrainStateMode
+from .views import ByteLatentFeatureView
 
 __all__ = [
     "AdaptiveSegmenter",

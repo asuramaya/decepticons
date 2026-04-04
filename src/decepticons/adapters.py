@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
+
 import numpy as np
 
 from .codecs import ensure_tokens
@@ -14,9 +16,6 @@ from .readout import RidgeReadout
 from .runtime import FitReport, SequenceReport, SequenceTrace
 from .substrates import TokenSubstrate
 from .views import ByteLatentFeatureView
-
-
-from dataclasses import dataclass
 
 
 @dataclass

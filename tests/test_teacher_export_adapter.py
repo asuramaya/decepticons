@@ -6,7 +6,12 @@ import numpy as np
 
 from decepticons.metrics import bits_per_byte_from_probabilities
 from decepticons.probability_diagnostics import probability_diagnostics
-from decepticons.teacher_export import TeacherExportAdapter, TeacherExportConfig, TeacherExportRecord, TeacherExportReport
+from decepticons.teacher_export import (
+    TeacherExportAdapter,
+    TeacherExportConfig,
+    TeacherExportRecord,
+    TeacherExportReport,
+)
 
 
 class TeacherExportAdapterTests(unittest.TestCase):

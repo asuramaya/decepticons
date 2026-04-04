@@ -147,7 +147,7 @@ class StatisticalBackoffCache:
         trigram_bucket_count: int = 4096,
         mixture_steps: int = 128,
         mixture_learning_rate: float = 0.25,
-    ) -> "StatisticalBackoffCache":
+    ) -> StatisticalBackoffCache:
         return cls(
             config=StatisticalBackoffConfig(
                 ngram=NgramMemoryConfig(

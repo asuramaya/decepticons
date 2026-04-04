@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 import numpy as np
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from examples.tools.diagnostics import (  # noqa: E402
+    SnapshotSeries,
     capture_snapshot,
     compare_ablation,
     compare_ablation_map,
@@ -22,7 +22,6 @@ from examples.tools.diagnostics import (  # noqa: E402
     summarize_alignment,
     summarize_binary_mask,
     summarize_snapshot_series,
-    SnapshotSeries,
 )
 
 

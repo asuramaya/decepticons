@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import unittest
 
-import numpy as np
-
 from decepticons.artifacts import ArtifactAccounting
 from decepticons.noncausal_reconstructive import (
     NoncausalReconstructiveAdapter,

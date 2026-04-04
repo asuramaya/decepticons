@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 import numpy as np
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
@@ -16,8 +15,9 @@ if str(SRC_ROOT) not in sys.path:
 if str(CAUSAL_ROOT) not in sys.path:
     sys.path.insert(0, str(CAUSAL_ROOT))
 
-from decepticons import HierarchicalSubstrate, TrainModeConfig, hierarchical_small  # noqa: E402
 from shared import build_hierarchical_stability_expert  # noqa: E402
+
+from decepticons import HierarchicalSubstrate, TrainModeConfig, hierarchical_small  # noqa: E402
 
 
 class TrainModeIntegrationTests(unittest.TestCase):

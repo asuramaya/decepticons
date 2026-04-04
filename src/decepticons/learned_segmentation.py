@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -12,10 +12,7 @@ def _sigmoid(values: np.ndarray) -> np.ndarray:
 
 
 def _coerce_feature_vector(features: BoundaryFeatures | Sequence[float] | np.ndarray, *, feature_dim: int) -> np.ndarray:
-    if isinstance(features, BoundaryFeatures):
-        vector = features.as_array()
-    else:
-        vector = np.asarray(features, dtype=np.float64)
+    vector = features.as_array() if isinstance(features, BoundaryFeatures) else np.asarray(features, dtype=np.float64)
     if vector.ndim != 1:
         raise ValueError("features must be a 1D vector")
     if vector.shape[0] != feature_dim:

@@ -11,9 +11,14 @@ from .artifacts import (
     make_artifact_accounting,
     make_replay_span,
 )
-from .codecs import ensure_tokens
-from .config import HierarchicalSubstrateConfig, OpenPredictiveCoderConfig, SampledReadoutBandConfig, SampledReadoutConfig
 from .bidirectional_context import BidirectionalContextConfig, BidirectionalContextProbe, BidirectionalContextStats
+from .codecs import ensure_tokens
+from .config import (
+    HierarchicalSubstrateConfig,
+    OpenPredictiveCoderConfig,
+    SampledReadoutBandConfig,
+    SampledReadoutConfig,
+)
 from .control import ControllerSummary
 from .hierarchical import HierarchicalSubstrate
 from .hierarchical_views import HierarchicalFeatureView

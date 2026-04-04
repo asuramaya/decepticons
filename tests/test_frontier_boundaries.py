@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import fields
-from pathlib import Path
 import inspect
 import unittest
+from dataclasses import fields
+from pathlib import Path
 
 import decepticons as opc
-
 
 SRC_ROOT = Path(__file__).resolve().parents[1] / "src" / "decepticons"
 

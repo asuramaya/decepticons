@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .config import ReservoirConfig, ReservoirTopology
+from .config import ReservoirConfig
 
 
 def spectral_radius(matrix: np.ndarray) -> float:

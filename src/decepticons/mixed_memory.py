@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
 from .config import MixedMemoryConfig
 from .delay import DelayLineSubstrate
 from .reservoir import EchoStateReservoir
-
-
-from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

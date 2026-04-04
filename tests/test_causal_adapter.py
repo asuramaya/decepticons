@@ -14,7 +14,6 @@ from decepticons.exact_context import (
 )
 from decepticons.ngram_memory import NgramMemory, NgramMemoryConfig
 
-
 MODULE_NAME = "decepticons.causal_predictive"
 CLASS_NAMES = ("CausalPredictiveAdapter", "CausalPredictiveModel")
 

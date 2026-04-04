@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from importlib import util
-from pathlib import Path
 import sys
 import unittest
+from importlib import util
+from pathlib import Path
 
 import numpy as np
 
 from decepticons import ByteCodec, TrainModeConfig
-
 
 PROJECTS_ROOT = Path(__file__).resolve().parents[1] / "examples" / "projects"
 

@@ -7,7 +7,7 @@ import numpy as np
 
 
 def _stable_seed(base_seed: int, name: str) -> int:
-    digest = hashlib.sha256(f"{base_seed}:{name}".encode("utf-8")).digest()
+    digest = hashlib.sha256(f"{base_seed}:{name}".encode()).digest()
     return int.from_bytes(digest[:8], "little") & 0x7FFFFFFF
 
 

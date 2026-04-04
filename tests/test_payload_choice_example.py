@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from importlib import util
 import os
-from pathlib import Path
 import subprocess
 import sys
 import unittest
+from importlib import util
+from pathlib import Path
 
 import numpy as np
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = REPO_ROOT / "examples" / "projects" / "noncausal" / "payload_choice"

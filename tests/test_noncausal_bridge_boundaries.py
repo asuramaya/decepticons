@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import fields
 import inspect
 import unittest
+from dataclasses import fields
 
 import decepticons as opc
 

@@ -108,10 +108,7 @@ class LatentCommitter:
         if local_view.shape != (self.config.reservoir_features,):
             raise ValueError("local_view does not match configured reservoir_features")
 
-        if state.previous_view is None:
-            novelty = 0.0
-        else:
-            novelty = float(np.mean(np.abs(local_view - state.previous_view)))
+        novelty = 0.0 if state.previous_view is None else float(np.mean(np.abs(local_view - state.previous_view)))
 
         state.patch_sum = state.patch_sum + local_view
         state.patch_length += 1

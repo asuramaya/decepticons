@@ -7,6 +7,7 @@ import numpy as np
 
 from .control import ControllerSummary, ControllerSummaryBuilder, ControllerSummaryConfig
 
+
 def _sigmoid(value: float) -> float:
     return float(1.0 / (1.0 + np.exp(-value)))
 

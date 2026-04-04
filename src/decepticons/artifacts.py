@@ -43,7 +43,7 @@ class ArtifactMetadata:
         object.__setattr__(self, "items", tuple(normalized))
 
     @classmethod
-    def from_mapping(cls, mapping: Mapping[str, Any]) -> "ArtifactMetadata":
+    def from_mapping(cls, mapping: Mapping[str, Any]) -> ArtifactMetadata:
         return cls(items=tuple(mapping.items()))
 
     def to_dict(self) -> dict[str, Any]:
@@ -52,7 +52,7 @@ class ArtifactMetadata:
     def get(self, key: str, default: Any = None) -> Any:
         return self.to_dict().get(key, default)
 
-    def merged(self, **updates: Any) -> "ArtifactMetadata":
+    def merged(self, **updates: Any) -> ArtifactMetadata:
         payload = self.to_dict()
         payload.update(updates)
         return ArtifactMetadata.from_mapping(payload)

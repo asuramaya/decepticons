@@ -9,7 +9,6 @@ from .artifacts import (
     ArtifactAccounting,
     ArtifactMetadata,
     make_artifact_accounting,
-    make_replay_span,
 )
 from .bridge_features import BridgeFeatureArrays, BridgeFeatureConfig, bridge_feature_arrays
 from .codecs import ensure_tokens

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 import math
+from dataclasses import dataclass, replace
 
 import numpy as np
-
 
 CAUSAL_BANK_FAMILY_ID = "causal-bank"
 CAUSAL_BANK_DETERMINISTIC_SUBSTRATE_SEED = 42
@@ -165,10 +164,10 @@ def validate_config(config: CausalBankConfig) -> None:
         raise ValueError(f"Unknown patch_causal_decoder: {config.patch_causal_decoder!r}")
     if config.patch_size > 1 and config.patch_causal_decoder == "none":
         import warnings
-        warnings.warn("patch_size > 1 with patch_causal_decoder='none' leaks future bytes within patches")
+        warnings.warn("patch_size > 1 with patch_causal_decoder='none' leaks future bytes within patches", stacklevel=2)
     if config.trust_routing and not config.table_path:
         import warnings
-        warnings.warn("trust_routing=True but no table_path — will use synthetic table")
+        warnings.warn("trust_routing=True but no table_path — will use synthetic table", stacklevel=2)
 
 
 def learnable_substrate_keys(config: CausalBankConfig) -> tuple[str, ...]:
