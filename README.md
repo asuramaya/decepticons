@@ -1,5 +1,7 @@
 # Decepticons
 
+![Decepticons](docs/logo.webp)
+
 Shared kernel for predictive descendants.
 
 `decepticons` extracts reusable model mechanisms from a broader
