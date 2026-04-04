@@ -8,7 +8,7 @@ from .model import OpenPredictiveCoder
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="opc", description="Open Predictive Coder CLI")
+    parser = argparse.ArgumentParser(prog="decepticons", description="Decepticons CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     fit_parser = subparsers.add_parser("fit", help="fit on a text file and optionally sample")
