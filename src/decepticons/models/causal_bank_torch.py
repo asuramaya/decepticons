@@ -540,12 +540,6 @@ class CausalBankModel(nn.Module):
             raise RuntimeError("causal-bank linear path is disabled.")
         x = self._embed_linear(chars)
 
-        # --- Selective scan replaces the entire substrate path ---
-        if self._use_selective_scan:
-            states = self._selective_scan(x)
-            states = self._apply_mode_gate(states, self._static_bank_mode_gate())
-            return self._apply_mode_gate(states, mode_gate), x
-
         linear_in_proj = self.linear_in_proj.to(device=x.device, dtype=x.dtype)
         drive = torch.matmul(x, linear_in_proj)
 
@@ -594,7 +588,13 @@ class CausalBankModel(nn.Module):
                 states = self._apply_mode_gate(states, self._static_bank_mode_gate())
 
         states = self._apply_mode_gate(states, self._static_bank_mode_gate())
-        return self._apply_mode_gate(states, mode_gate), x
+        states = self._apply_mode_gate(states, mode_gate)
+
+        # Augment: selective scan adds content-dependent signal on top of frozen bank
+        if self._use_selective_scan:
+            states = states + self._selective_scan(x)
+
+        return states, x
 
     def _compute_online_memory_features(self, chars: torch.Tensor) -> torch.Tensor:
         """Process sequence through the online causal memory, returning projected features.
