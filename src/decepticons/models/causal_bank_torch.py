@@ -125,6 +125,17 @@ class CausalBankModel(nn.Module):
                     vocab_size,
                     config.linear_readout_num_experts,
                 )
+            # Banded readout: split modes by timescale, one readout per band
+            n_bands = getattr(config, 'readout_bands', 1)
+            if n_bands > 1:
+                band_size = config.linear_modes // n_bands
+                band_in_dim = band_size + config.embedding_dim
+                band_hidden = tuple(h // n_bands for h in config.linear_hidden)
+                self._band_readouts = nn.ModuleList([
+                    MLP(band_in_dim, band_hidden, vocab_size)
+                    for _ in range(n_bands)
+                ])
+
             # Substrate polynomial expansion
             self._substrate_poly = getattr(config, 'substrate_poly_order', 1)
             if self._substrate_poly >= 2 and config.enable_linear:
@@ -609,6 +620,19 @@ class CausalBankModel(nn.Module):
         noise_sigma = getattr(self.config, 'training_noise', 0.0)
         if noise_sigma > 0 and self.training:
             states = states + torch.randn_like(states) * noise_sigma
+
+        n_bands = getattr(self.config, 'readout_bands', 1)
+        if n_bands > 1 and hasattr(self, '_band_readouts'):
+            # Grouped prediction: split modes by timescale, separate readout per band
+            modes = states.shape[-1]
+            band_size = modes // n_bands
+            band_logits = []
+            for i, readout in enumerate(self._band_readouts):
+                band_states = states[..., i * band_size : (i + 1) * band_size]
+                band_features = torch.cat([band_states, x], dim=-1)
+                band_logits.append(readout(band_features))
+            return sum(band_logits)
+
         features = torch.cat([states, x], dim=-1)
         if getattr(self, '_substrate_poly', 1) >= 2:
             proj = self._substrate_poly_proj(states)

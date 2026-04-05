@@ -44,6 +44,7 @@ class CausalBankConfig:
     linear_readout_kind: str = "mlp"
     linear_readout_depth: int = 1
     linear_readout_num_experts: int = 4
+    readout_bands: int = 1  # >1 splits modes by timescale, separate gradient per band
     local_window: int = 8
     local_hidden: tuple[int, ...] = (128,)
     local_scale: float = 0.25
