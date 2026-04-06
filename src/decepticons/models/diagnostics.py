@@ -68,6 +68,52 @@ def diagnose(model, tokens, *, vocab_size: int = 1024) -> dict[str, Any]:  # noq
         }
     results["timescale_bands"] = timescale_bands
 
+    # --- Phase analysis: how old is each mode's signal? ---
+    # For each mode, compute the autocorrelation across sequence positions.
+    # High autocorrelation = mode carries persistent signal (slow effective timescale).
+    # Low autocorrelation = mode responds to local input (fast effective timescale).
+    # Compare effective timescale to the mode's half-life — mismatch means
+    # the mode is being used differently than its decay rate suggests.
+    if states_np.shape[1] > 2:
+        # Lag-1 autocorrelation per mode (averaged across batch)
+        s_prev = states_np[:, :-1, :]
+        s_next = states_np[:, 1:, :]
+        # Normalize
+        s_prev_centered = s_prev - s_prev.mean(axis=1, keepdims=True)
+        s_next_centered = s_next - s_next.mean(axis=1, keepdims=True)
+        s_prev_std = s_prev_centered.std(axis=1, keepdims=True).clip(1e-8)
+        s_next_std = s_next_centered.std(axis=1, keepdims=True).clip(1e-8)
+        corr = (s_prev_centered * s_next_centered).mean(axis=1) / (s_prev_std * s_next_std).mean(axis=1)
+        lag1_autocorr = corr.mean(axis=0)  # [modes]
+
+        # Expected lag-1 autocorr from decay: simply the decay rate itself
+        expected_autocorr = decays
+
+        # Mismatch: modes behaving faster/slower than their half-life predicts
+        autocorr_mismatch = lag1_autocorr - expected_autocorr
+
+        results["phase"] = {
+            "lag1_autocorr_mean": round(float(lag1_autocorr.mean()), 4),
+            "lag1_autocorr_by_band": {
+                name: round(float(lag1_autocorr[
+                    timescale_bands[name]["mode_range"][0]:timescale_bands[name]["mode_range"][1]
+                ].mean()), 4)
+                for name in band_names
+            },
+            "expected_autocorr_by_band": {
+                name: round(float(expected_autocorr[
+                    timescale_bands[name]["mode_range"][0]:timescale_bands[name]["mode_range"][1]
+                ].mean()), 4)
+                for name in band_names
+            },
+            "mismatch_by_band": {
+                name: round(float(autocorr_mismatch[
+                    timescale_bands[name]["mode_range"][0]:timescale_bands[name]["mode_range"][1]
+                ].mean()), 4)
+                for name in band_names
+            },
+        }
+
     # --- Input projection structure ---
     proj = model.linear_in_proj.detach().cpu().numpy()
     col_norms = np.linalg.norm(proj, axis=0)
