@@ -110,13 +110,52 @@ def diagnose(model, tokens, *, vocab_size: int = 1024) -> dict[str, Any]:  # noq
             band_importance[name] = round(float(mode_importance[start:end].mean()), 6)
         results["readout_selectivity"]["by_timescale"] = band_importance
 
+    # --- Findings: what the numbers mean ---
+    findings = []
+    alive_pct = 100 * alive_mask.sum() / n_modes
+    if alive_pct < 50:
+        findings.append(f"CRITICAL: {100-alive_pct:.0f}% modes dead — substrate capacity wasted")
+    elif alive_pct < 90:
+        findings.append(f"WARNING: {100-alive_pct:.0f}% modes dead — some capacity wasted")
+
+    dominant = max(timescale_bands, key=lambda k: timescale_bands[k]["contribution_pct"])
+    dominant_pct = timescale_bands[dominant]["contribution_pct"]
+    if dominant_pct > 70:
+        findings.append(f"IMBALANCED: {dominant} band carries {dominant_pct:.0f}% of variance — other timescales underused")
+
+    if "readout_selectivity" in results:
+        rs = results["readout_selectivity"]
+        by_ts = rs.get("by_timescale", {})
+        if by_ts:
+            ts_values = list(by_ts.values())
+            ts_range = max(ts_values) - min(ts_values) if ts_values else 0
+            if ts_range < max(ts_values) * 0.1:
+                findings.append("UNIFORM: readout weights modes equally across timescales — no specialization learned")
+            else:
+                most_weighted = max(by_ts, key=by_ts.get)
+                findings.append(f"SPECIALIZED: readout favors {most_weighted} modes")
+
+        ratio = rs.get("mode_vs_embed_ratio", 1.0)
+        if ratio < 0.3:
+            findings.append("EMBED-DOMINATED: readout relies on embeddings more than bank — substrate underutilized")
+        elif ratio > 3.0:
+            findings.append("MODE-DOMINATED: readout relies on bank more than embeddings — bank is working")
+
+    proj = results.get("input_projection", {})
+    if proj.get("dead_cols", 0) > n_modes * 0.1:
+        findings.append(f"PROJECTION: {proj['dead_cols']} dead columns — modes receiving no input")
+
+    if not findings:
+        findings.append("HEALTHY: no anomalies detected")
+
+    results["findings"] = findings
+
     # --- Summary ---
     results["summary"] = {
-        "modes_alive_pct": round(100 * alive_mask.sum() / n_modes, 1),
-        "dominant_timescale": max(
-            timescale_bands, key=lambda k: timescale_bands[k]["contribution_pct"]
-        ),
+        "modes_alive_pct": round(alive_pct, 1),
+        "dominant_timescale": dominant,
         "input_projection_learnable": model.linear_in_proj.requires_grad,
+        "finding_count": len(findings),
     }
 
     if was_training:
@@ -152,5 +191,11 @@ def format_diagnostics(diag: dict[str, Any]) -> str:
             lines.append(
                 "  by timescale: " + "  ".join(f"{k}={v:.4f}" for k, v in by_ts.items())
             )
+
+    findings = diag.get("findings", [])
+    if findings:
+        lines.append("\nFINDINGS:")
+        for f in findings:
+            lines.append(f"  {f}")
 
     return "\n".join(lines)
