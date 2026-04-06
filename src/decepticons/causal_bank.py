@@ -188,6 +188,33 @@ def learnable_substrate_keys(config: CausalBankConfig) -> tuple[str, ...]:
     return ()
 
 
+def substrate_training_hints(config: CausalBankConfig) -> dict:
+    """Return training requirements for the substrate mode.
+
+    Downstream trainers should read these hints and apply them automatically.
+    No operator memory required.
+    """
+    hints: dict = {"warmup_steps": 0, "warnings": []}
+    if config.substrate_mode == "learnable_decays":
+        hints["warmup_steps"] = max(500, config.max_seq_len)
+        hints["warnings"].append(
+            "learnable_decays: gradients through kernel are noisy at init. "
+            f"Warmup {hints['warmup_steps']} steps recommended."
+        )
+    if config.substrate_mode == "learned_recurrence":
+        hints["warmup_steps"] = max(1000, config.max_seq_len * 2)
+        hints["warnings"].append(
+            "learned_recurrence: full gradient through time is memory-intensive. "
+            f"Warmup {hints['warmup_steps']} steps recommended. May OOM on <16GB."
+        )
+    if config.oscillatory_frac > 0 and config.substrate_mode != "frozen":
+        hints["warnings"].append(
+            "oscillatory + learnable substrate: oscillatory phases interact with "
+            "learned dynamics. Monitor phase diagnostics for instability."
+        )
+    return hints
+
+
 def osc_pair_count(config: CausalBankConfig) -> int:
     osc_pairs = int((config.linear_modes * config.oscillatory_frac) // 2)
     return max(min(osc_pairs, config.linear_modes // 2), 0)
