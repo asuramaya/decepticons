@@ -236,10 +236,13 @@ class CausalBankModel(_ModuleLike):
         if config is None:
             config = CausalBankConfig()
         validate_config(config)
-        if getattr(config, "state_dim", 0) > 0 or getattr(config, "substrate_mode", "frozen") == "gated_retention":
+        if getattr(config, "state_dim", 0) > 0 or getattr(config, "substrate_mode", "frozen") in {
+            "gated_retention",
+            "gated_delta",
+        }:
             raise ValueError(
                 "causal-bank MLX backend does not implement the learned recurrent state paths; "
-                "use the Torch backend for state_dim/state_impl/gated_retention experiments."
+                "use the Torch backend for state_dim/state_impl/gated_retention/gated_delta experiments."
             )
 
         self.vocab_size = vocab_size

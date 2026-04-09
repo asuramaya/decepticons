@@ -173,3 +173,22 @@ def test_gated_retention_substrate_trains_and_uses_primary_memory():
 
     changed = (model.linear_in_proj.data - initial_proj).abs().sum().item()
     assert changed > 0, "gated retention substrate should update its learned input projection"
+
+
+def test_gated_delta_substrate_trains_and_uses_primary_memory():
+    """Gated delta should train as the primary scan substrate, not just an additive augment."""
+    cfg = scale_config(CausalBankConfig(
+        substrate_mode="gated_delta",
+        state_dim=16,
+        state_impl="scan",
+        num_heads=4,
+        oscillatory_frac=0.0,
+    ), 4.0)
+    model = CausalBankModel(256, cfg)
+
+    initial_proj = model.linear_in_proj.data.clone()
+    losses = _train_steps(model, steps=12, vocab=256, seq_len=32)
+    assert _loss_improved(losses), f"loss should improve: {losses}"
+
+    changed = (model.linear_in_proj.data - initial_proj).abs().sum().item()
+    assert changed > 0, "gated delta substrate should update its learned input projection"

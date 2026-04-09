@@ -65,11 +65,11 @@ class CausalBankConfig:
     input_proj_scheme: str = "random"
     init_seed: int = 42
     memory_kind: str = "none"
-    substrate_mode: str = "frozen"  # "frozen", "learnable_decays", "learnable_mixing", "learned_recurrence", "gated_retention"
+    substrate_mode: str = "frozen"  # "frozen", "learnable_decays", "learnable_mixing", "learned_recurrence", "gated_retention", "gated_delta"
     num_blocks: int = 1
     block_mixing_ratio: float = 0.25  # bottleneck ratio for inter-block mixing
     state_dim: int = 0  # selective scan state dim (0 = use linear_modes, >0 = compressed state)
-    state_impl: str = "scan"  # "scan" = head-factored selective scan, "retention" = multi-head matrix memory
+    state_impl: str = "scan"  # "scan" = head-factored vector state, "retention" = multi-head matrix memory
     num_heads: int = 1  # multi-head state (each head runs independent scan)
     patch_size: int = 1  # byte-to-patch grouping (1 = raw bytes, >1 = patch encoding)
     num_hemispheres: int = 1  # 1=uniform, 2=fast/slow split
@@ -132,7 +132,14 @@ def validate_config(config: CausalBankConfig) -> None:
             raise ValueError("causal-bank oscillatory_period_min must be positive.")
         if config.oscillatory_period_max <= config.oscillatory_period_min:
             raise ValueError("causal-bank oscillatory_period_max must be > oscillatory_period_min.")
-    if config.substrate_mode not in ("frozen", "learnable_decays", "learnable_mixing", "learned_recurrence", "gated_retention"):
+    if config.substrate_mode not in (
+        "frozen",
+        "learnable_decays",
+        "learnable_mixing",
+        "learned_recurrence",
+        "gated_retention",
+        "gated_delta",
+    ):
         raise ValueError(f"Unknown causal-bank substrate_mode: {config.substrate_mode!r}")
     from decepticons.memory_protocol import MEMORY_KINDS
     if config.memory_kind not in MEMORY_KINDS:
@@ -154,6 +161,13 @@ def validate_config(config: CausalBankConfig) -> None:
             raise ValueError("causal-bank gated_retention requires state_dim > 0.")
         if config.state_impl != "retention":
             raise ValueError("causal-bank gated_retention requires state_impl='retention'.")
+    if config.substrate_mode == "gated_delta":
+        if not config.enable_linear:
+            raise ValueError("causal-bank gated_delta requires enable_linear=True.")
+        if config.state_dim <= 0:
+            raise ValueError("causal-bank gated_delta requires state_dim > 0.")
+        if config.state_impl != "scan":
+            raise ValueError("causal-bank gated_delta requires state_impl='scan'.")
     if config.num_heads < 1:
         raise ValueError("causal-bank num_heads must be >= 1.")
     if config.state_dim > 0 and config.state_dim % config.num_heads != 0:
@@ -200,6 +214,8 @@ def learnable_substrate_keys(config: CausalBankConfig) -> tuple[str, ...]:
         return ("linear_in_proj", "linear_decays", "recurrence_gate")
     if config.substrate_mode == "gated_retention":
         return ("linear_in_proj",)
+    if config.substrate_mode == "gated_delta":
+        return ("linear_in_proj",)
     return ()
 
 
@@ -227,6 +243,12 @@ def substrate_training_hints(config: CausalBankConfig) -> dict:
         hints["warnings"].append(
             "gated_retention: learned matrix memory is the primary substrate. "
             f"Warmup {hints['warmup_steps']} steps recommended while write/erase gates stabilize."
+        )
+    if config.substrate_mode == "gated_delta":
+        hints["warmup_steps"] = max(1000, config.max_seq_len * 2)
+        hints["warnings"].append(
+            "gated_delta: learned vector memory is the primary substrate. "
+            f"Warmup {hints['warmup_steps']} steps recommended while retain/write/erase gates stabilize."
         )
     if config.oscillatory_frac > 0 and config.substrate_mode != "frozen":
         hints["warnings"].append(

@@ -205,16 +205,18 @@ class CausalBankModel(nn.Module):
         self._state_impl = getattr(config, "state_impl", "scan")
         self._substrate_mode = getattr(config, "substrate_mode", "frozen")
         self._use_gated_retention_substrate = self._substrate_mode == "gated_retention"
-        self._use_state_augment = getattr(config, "state_dim", 0) > 0 and not self._use_gated_retention_substrate
+        self._use_gated_delta_substrate = self._substrate_mode == "gated_delta"
+        self._use_primary_state_substrate = self._use_gated_retention_substrate or self._use_gated_delta_substrate
+        self._use_state_augment = getattr(config, "state_dim", 0) > 0 and not self._use_primary_state_substrate
         self._state_num_heads = max(int(getattr(config, "num_heads", 1)), 1)
         self._num_hemispheres = getattr(config, "num_hemispheres", 1)
-        if self._use_state_augment or self._use_gated_retention_substrate:
+        if self._use_state_augment or self._use_primary_state_substrate:
             sd = int(config.state_dim)
             ed = int(config.embedding_dim)
             self._state_head_dim = max(sd // self._state_num_heads, 1)
             self._state_width = self._state_num_heads * self._state_head_dim
 
-            if self._state_impl == "scan" and not self._use_gated_retention_substrate:
+            if self._state_impl == "scan":
                 self._ssm_A = nn.Parameter(torch.zeros(self._state_num_heads, self._state_head_dim))
                 self._ssm_B_proj = nn.Linear(ed, self._state_width, bias=False)
                 self._ssm_C_proj = nn.Linear(ed, self._state_width, bias=False)
@@ -235,6 +237,17 @@ class CausalBankModel(nn.Module):
                         flat[:fast_dim] = torch.linspace(-1.0, -3.0, fast_dim)
                         if slow_dim > 0:
                             flat[fast_dim:] = torch.linspace(-0.01, -0.5, slow_dim)
+                if self._use_gated_delta_substrate:
+                    self._gated_delta_retain_gate = nn.Linear(ed, self._state_width)
+                    self._gated_delta_write_gate = nn.Linear(ed, self._state_width)
+                    self._gated_delta_erase_gate = nn.Linear(ed, self._state_width)
+                    with torch.no_grad():
+                        self._gated_delta_retain_gate.weight.zero_()
+                        self._gated_delta_write_gate.weight.zero_()
+                        self._gated_delta_erase_gate.weight.zero_()
+                        self._gated_delta_retain_gate.bias.fill_(2.0)
+                        self._gated_delta_write_gate.bias.fill_(-1.0)
+                        self._gated_delta_erase_gate.bias.fill_(-2.0)
             else:
                 self._retention_q_proj = nn.Linear(ed, self._state_width, bias=False)
                 self._retention_k_proj = nn.Linear(ed, self._state_width, bias=False)
@@ -351,7 +364,9 @@ class CausalBankModel(nn.Module):
     def param_groups(self, base_lr: float) -> list[dict]:
         """Return parameter groups with per-hemisphere learning rates."""
         if getattr(self, "_num_hemispheres", 1) != 2 or not (
-            getattr(self, "_use_state_augment", False) or getattr(self, "_use_gated_retention_substrate", False)
+            getattr(self, "_use_state_augment", False)
+            or getattr(self, "_use_gated_retention_substrate", False)
+            or getattr(self, "_use_gated_delta_substrate", False)
         ):
             return [{"params": list(self.parameters()), "lr": base_lr}]
 
@@ -372,6 +387,9 @@ class CausalBankModel(nn.Module):
                 or "_gated_retention_retain_gate" in name
                 or "_gated_retention_write_gate" in name
                 or "_gated_retention_erase_gate" in name
+                or "_gated_delta_retain_gate" in name
+                or "_gated_delta_write_gate" in name
+                or "_gated_delta_erase_gate" in name
             ):
                 # Split SSM params conceptually - but they're single tensors
                 # Use the fast LR for all SSM params when hemispheres are active
@@ -547,6 +565,44 @@ class CausalBankModel(nn.Module):
         linear_in_proj = self.linear_in_proj.to(device=device, dtype=dtype)
         return out + self._ssm_D * torch.matmul(x_embed, linear_in_proj)
 
+    def _gated_delta_states(self, x_embed: torch.Tensor) -> torch.Tensor:
+        """Primary learned scan substrate with token-conditioned retain/write/erase."""
+        batch, seq_len, _ = x_embed.shape
+        device = x_embed.device
+        dtype = x_embed.dtype
+
+        value = self._ssm_B_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
+        read = self._ssm_C_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
+
+        base_decay = torch.exp(self._ssm_A.to(dtype=dtype).clamp(max=-1e-6)).unsqueeze(0).unsqueeze(0)
+        retain = torch.sigmoid(self._gated_delta_retain_gate(x_embed)).to(dtype=dtype).reshape(
+            batch,
+            seq_len,
+            self._state_num_heads,
+            self._state_head_dim,
+        )
+        write = torch.sigmoid(self._gated_delta_write_gate(x_embed)).to(dtype=dtype).reshape(
+            batch,
+            seq_len,
+            self._state_num_heads,
+            self._state_head_dim,
+        )
+        erase = torch.sigmoid(self._gated_delta_erase_gate(x_embed)).to(dtype=dtype).reshape(
+            batch,
+            seq_len,
+            self._state_num_heads,
+            self._state_head_dim,
+        )
+
+        keep = (base_decay * retain * (1.0 - erase) * (1.0 - write)).clamp(min=1e-6, max=1.0 - 1e-6)
+        drive = write * value
+        states = self._chunked_recurrence_scan(keep, drive)
+        outputs = states * read
+
+        out = self._ssm_out_proj(outputs.reshape(batch, seq_len, self._state_width))
+        linear_in_proj = self.linear_in_proj.to(device=device, dtype=dtype)
+        return out + self._ssm_D * torch.matmul(x_embed, linear_in_proj)
+
     def _retention_states(self, x_embed: torch.Tensor) -> torch.Tensor:
         """RetNet-style multi-head matrix memory with exponential decay."""
         batch, seq_len, _ = x_embed.shape
@@ -631,6 +687,8 @@ class CausalBankModel(nn.Module):
         """
         if self._use_gated_retention_substrate:
             return self._gated_retention_states(x)
+        if self._use_gated_delta_substrate:
+            return self._gated_delta_states(x)
         if self._learned_recurrence:
             return self._linear_states_recurrent(drive, x)
         if self.config.linear_impl == "kernel":
@@ -656,7 +714,7 @@ class CausalBankModel(nn.Module):
 
         # Prepare kernels once (used by kernel and learnable_decays paths)
         kernels = None
-        if not self._learned_recurrence and not self._use_gated_retention_substrate and self.config.linear_impl == "kernel":
+        if not self._learned_recurrence and not self._use_primary_state_substrate and self.config.linear_impl == "kernel":
             if self._recompute_kernel:
                 # Recompute kernel from learnable decays
                 time_idx = self._kernel_time_idx[:timesteps].to(device=x.device)
@@ -861,7 +919,7 @@ class CausalBankModel(nn.Module):
             drive = torch.matmul(encoded, linear_in_proj)
 
             kernels = None
-            if not self._learned_recurrence and not self._use_gated_retention_substrate and self.config.linear_impl == "kernel":
+            if not self._learned_recurrence and not self._use_primary_state_substrate and self.config.linear_impl == "kernel":
                 if self._recompute_kernel:
                     time_idx = self._kernel_time_idx[:n_patches].to(device=encoded.device)
                     delta = time_idx[:, None] - time_idx[None, :]
@@ -980,7 +1038,7 @@ class CausalBankModel(nn.Module):
             drive = torch.matmul(x_enc, linear_in_proj)
             # Use timesteps = n_patches for substrate
             kernels = None
-            if not self._learned_recurrence and not self._use_gated_retention_substrate and self.config.linear_impl == "kernel":
+            if not self._learned_recurrence and not self._use_primary_state_substrate and self.config.linear_impl == "kernel":
                 if self._recompute_kernel:
                     time_idx = self._kernel_time_idx[:n_patches].to(device=x_enc.device)
                     delta = time_idx[:, None] - time_idx[None, :]
