@@ -201,40 +201,87 @@ class CausalBankModel(nn.Module):
                     nn.Linear(mixing_dim, config.linear_modes),
                 ))
 
-        # --- Selective scan (Mamba-style) ---
-        self._use_selective_scan = getattr(config, 'state_dim', 0) > 0
-        if self._use_selective_scan:
-            sd = config.state_dim
-            ed = config.embedding_dim
-            # A: diagonal decay (learned, log-space)
-            self._ssm_A = nn.Parameter(torch.zeros(sd))
-            # B: input → state write
-            self._ssm_B = nn.Linear(ed, sd, bias=False)
-            # C: input → state read
-            self._ssm_C = nn.Linear(ed, sd, bias=False)
-            # D: skip connection
-            self._ssm_D = nn.Parameter(torch.ones(1))
-            # Output projection: state_dim → modes (to feed into readout)
-            self._ssm_out = nn.Linear(sd, config.linear_modes, bias=False)
+        # --- Recurrent state augment / learned state substrate ---
+        self._state_impl = getattr(config, "state_impl", "scan")
+        self._substrate_mode = getattr(config, "substrate_mode", "frozen")
+        self._use_gated_retention_substrate = self._substrate_mode == "gated_retention"
+        self._use_state_augment = getattr(config, "state_dim", 0) > 0 and not self._use_gated_retention_substrate
+        self._state_num_heads = max(int(getattr(config, "num_heads", 1)), 1)
+        self._num_hemispheres = getattr(config, "num_hemispheres", 1)
+        if self._use_state_augment or self._use_gated_retention_substrate:
+            sd = int(config.state_dim)
+            ed = int(config.embedding_dim)
+            self._state_head_dim = max(sd // self._state_num_heads, 1)
 
-            # Initialize A from decay schedule
-            with torch.no_grad():
-                # Log-space: A_actual = exp(A_log), so state decays when A_log < 0
-                init_decays = torch.linspace(-0.1, -5.0, sd)
-                self._ssm_A.copy_(init_decays)
+            if self._state_impl == "scan" and not self._use_gated_retention_substrate:
+                self._ssm_A = nn.Parameter(torch.zeros(self._state_num_heads, self._state_head_dim))
+                self._ssm_B = nn.ModuleList(
+                    nn.Linear(ed, self._state_head_dim, bias=False)
+                    for _ in range(self._state_num_heads)
+                )
+                self._ssm_C = nn.ModuleList(
+                    nn.Linear(ed, self._state_head_dim, bias=False)
+                    for _ in range(self._state_num_heads)
+                )
+                self._ssm_D = nn.Parameter(torch.ones(1))
+                self._ssm_out = nn.ModuleList(
+                    nn.Linear(self._state_head_dim, config.linear_modes, bias=False)
+                    for _ in range(self._state_num_heads)
+                )
 
-            self._num_hemispheres = getattr(config, 'num_hemispheres', 1)
-            if self._num_hemispheres == 2:
-                fast_dim = max(int(sd * getattr(config, 'fast_hemisphere_ratio', 0.25)), 1)
-                slow_dim = sd - fast_dim
-                self._fast_dim = fast_dim
-                self._slow_dim = slow_dim
-                # Re-initialize A with different decay ranges
                 with torch.no_grad():
-                    # Fast: short decay (forgets quickly, range -1 to -3)
-                    self._ssm_A[:fast_dim] = torch.linspace(-1.0, -3.0, fast_dim)
-                    # Slow: long decay (remembers, range -0.01 to -0.5)
-                    self._ssm_A[fast_dim:] = torch.linspace(-0.01, -0.5, slow_dim)
+                    init_decays = torch.linspace(-0.1, -5.0, sd).view(self._state_num_heads, self._state_head_dim)
+                    self._ssm_A.copy_(init_decays)
+
+                if self._num_hemispheres == 2:
+                    fast_dim = max(int(sd * getattr(config, "fast_hemisphere_ratio", 0.25)), 1)
+                    slow_dim = max(sd - fast_dim, 0)
+                    self._fast_dim = fast_dim
+                    self._slow_dim = slow_dim
+                    with torch.no_grad():
+                        flat = self._ssm_A.view(-1)
+                        flat[:fast_dim] = torch.linspace(-1.0, -3.0, fast_dim)
+                        if slow_dim > 0:
+                            flat[fast_dim:] = torch.linspace(-0.01, -0.5, slow_dim)
+            else:
+                self._retention_q = nn.ModuleList(
+                    nn.Linear(ed, self._state_head_dim, bias=False)
+                    for _ in range(self._state_num_heads)
+                )
+                self._retention_k = nn.ModuleList(
+                    nn.Linear(ed, self._state_head_dim, bias=False)
+                    for _ in range(self._state_num_heads)
+                )
+                self._retention_v = nn.ModuleList(
+                    nn.Linear(ed, self._state_head_dim, bias=False)
+                    for _ in range(self._state_num_heads)
+                )
+                self._retention_out = nn.ModuleList(
+                    nn.Linear(self._state_head_dim, config.linear_modes, bias=False)
+                    for _ in range(self._state_num_heads)
+                )
+                self._retention_logit_decay = nn.Parameter(torch.zeros(self._state_num_heads))
+                self._retention_D = nn.Parameter(torch.ones(1))
+                with torch.no_grad():
+                    if self._num_hemispheres == 2 and self._state_num_heads > 1:
+                        fast_heads = max(int(round(self._state_num_heads * getattr(config, "fast_hemisphere_ratio", 0.25))), 1)
+                        slow_heads = max(self._state_num_heads - fast_heads, 0)
+                        self._retention_logit_decay[:fast_heads] = torch.linspace(-1.5, 0.0, fast_heads)
+                        if slow_heads > 0:
+                            self._retention_logit_decay[fast_heads:] = torch.linspace(2.0, 4.0, slow_heads)
+                    else:
+                        self._retention_logit_decay.copy_(torch.linspace(0.5, 3.5, self._state_num_heads))
+                if self._use_gated_retention_substrate:
+                    self._gated_retention_retain_gate = nn.Linear(ed, self._state_num_heads)
+                    self._gated_retention_write_gate = nn.Linear(ed, self._state_num_heads)
+                    self._gated_retention_erase_gate = nn.Linear(ed, self._state_num_heads)
+                    with torch.no_grad():
+                        self._gated_retention_retain_gate.weight.zero_()
+                        self._gated_retention_write_gate.weight.zero_()
+                        self._gated_retention_erase_gate.weight.zero_()
+                        self._gated_retention_retain_gate.bias.fill_(2.0)
+                        self._gated_retention_write_gate.bias.fill_(-1.0)
+                        self._gated_retention_erase_gate.bias.fill_(-2.0)
 
         # --- Patch encoding ---
         self._patch_size = getattr(config, 'patch_size', 1)
@@ -323,7 +370,9 @@ class CausalBankModel(nn.Module):
 
     def param_groups(self, base_lr: float) -> list[dict]:
         """Return parameter groups with per-hemisphere learning rates."""
-        if getattr(self, '_num_hemispheres', 1) != 2 or not self._use_selective_scan:
+        if getattr(self, "_num_hemispheres", 1) != 2 or not (
+            getattr(self, "_use_state_augment", False) or getattr(self, "_use_gated_retention_substrate", False)
+        ):
             return [{"params": list(self.parameters()), "lr": base_lr}]
 
         fast_params = []
@@ -332,7 +381,18 @@ class CausalBankModel(nn.Module):
         fast_mult = getattr(self.config, 'fast_lr_mult', 4.0)
 
         for name, param in self.named_parameters():
-            if '_ssm_A' in name or '_ssm_B' in name or '_ssm_C' in name:
+            if (
+                "_ssm_A" in name
+                or "_ssm_B" in name
+                or "_ssm_C" in name
+                or "_retention_q" in name
+                or "_retention_k" in name
+                or "_retention_v" in name
+                or "_retention_logit_decay" in name
+                or "_gated_retention_retain_gate" in name
+                or "_gated_retention_write_gate" in name
+                or "_gated_retention_erase_gate" in name
+            ):
                 # Split SSM params conceptually - but they're single tensors
                 # Use the fast LR for all SSM params when hemispheres are active
                 # (the decay initialization already handles the fast/slow split)
@@ -453,43 +513,43 @@ class CausalBankModel(nn.Module):
 
         return states
 
-    def _selective_scan(self, x_embed: torch.Tensor) -> torch.Tensor:
-        """Mamba-style selective scan.
+    def _state_augment(self, x_embed: torch.Tensor) -> torch.Tensor:
+        if self._state_impl == "scan":
+            return self._selective_scan(x_embed)
+        return self._retention_states(x_embed)
 
-        x_embed: [batch, seq, embed_dim]
-        Returns: [batch, seq, linear_modes]
-        """
+    def _selective_scan(self, x_embed: torch.Tensor) -> torch.Tensor:
+        """Head-factored selective scan over the content-dependent augment state."""
         batch, seq_len, _ = x_embed.shape
-        sd = self._ssm_A.shape[0]
         device = x_embed.device
         dtype = x_embed.dtype
 
-        # Compute input-dependent B and C for all positions
-        B = self._ssm_B(x_embed)  # [batch, seq, state_dim]
-        C = self._ssm_C(x_embed)  # [batch, seq, state_dim]
+        B = torch.stack([layer(x_embed) for layer in self._ssm_B], dim=2)
+        C = torch.stack([layer(x_embed) for layer in self._ssm_C], dim=2)
 
-        # Discretize A: exp(A_log) where A_log < 0 gives decay in (0, 1)
-        torch.exp(self._ssm_A.to(dtype=dtype))  # [state_dim]
-
-        # Parallel chunked scan (same pattern as gated recurrence)
         K = min(32, seq_len)
         n_chunks = (seq_len + K - 1) // K
 
-        y = torch.zeros(batch, seq_len, sd, device=device, dtype=dtype)
-        h = torch.zeros(batch, sd, device=device, dtype=dtype)
+        y = torch.zeros(
+            batch,
+            seq_len,
+            self._state_num_heads,
+            self._state_head_dim,
+            device=device,
+            dtype=dtype,
+        )
+        h = torch.zeros(batch, self._state_num_heads, self._state_head_dim, device=device, dtype=dtype)
 
         for c_idx in range(n_chunks):
             start = c_idx * K
             end = min(start + K, seq_len)
 
-            B_chunk = B[:, start:end, :]  # [batch, chunk, sd]
-            C_chunk = C[:, start:end, :]
+            B_chunk = B[:, start:end, :, :]
+            C_chunk = C[:, start:end, :, :]
+            drive = B_chunk
 
-            # drive = B * input (input projection into state)
-            drive = B_chunk  # [batch, chunk, sd]
-
-            log_a = self._ssm_A.to(dtype=dtype).unsqueeze(0).unsqueeze(0).expand(batch, end - start, -1)
-            log_a = log_a.clamp(max=-1e-6)  # ensure decay
+            log_a = self._ssm_A.to(dtype=dtype).unsqueeze(0).unsqueeze(0).expand(batch, end - start, -1, -1)
+            log_a = log_a.clamp(max=-1e-6)
             log_cum_a = torch.cumsum(log_a, dim=1)
             cum_a = torch.exp(log_cum_a)
 
@@ -498,16 +558,110 @@ class CausalBankModel(nn.Module):
             cum_wd = torch.cumsum(weighted_drive, dim=1)
 
             chunk_states = cum_a * (h.unsqueeze(1) + cum_wd)
-
-            # Read with C
             chunk_y = chunk_states * C_chunk
-            y[:, start:end, :] = chunk_y
-            h = chunk_states[:, -1, :]
+            y[:, start:end, :, :] = chunk_y
+            h = chunk_states[:, -1, :, :]
 
-        # Skip connection + output projection
-        linear_in_proj = self.linear_in_proj.to(dtype=dtype)
-        out = self._ssm_out(y) + self._ssm_D * torch.matmul(x_embed, linear_in_proj)
-        return out
+        out = torch.zeros(batch, seq_len, self.config.linear_modes, device=device, dtype=dtype)
+        for head_idx, out_proj in enumerate(self._ssm_out):
+            out = out + out_proj(y[:, :, head_idx, :])
+        linear_in_proj = self.linear_in_proj.to(device=device, dtype=dtype)
+        return out + self._ssm_D * torch.matmul(x_embed, linear_in_proj)
+
+    def _retention_states(self, x_embed: torch.Tensor) -> torch.Tensor:
+        """RetNet-style multi-head matrix memory with exponential decay."""
+        batch, seq_len, _ = x_embed.shape
+        device = x_embed.device
+        dtype = x_embed.dtype
+
+        q = torch.stack([layer(x_embed) for layer in self._retention_q], dim=2)
+        k = torch.stack([layer(x_embed) for layer in self._retention_k], dim=2)
+        v = torch.stack([layer(x_embed) for layer in self._retention_v], dim=2)
+
+        decay = torch.sigmoid(self._retention_logit_decay).to(device=device, dtype=dtype).view(
+            1, self._state_num_heads, 1, 1
+        )
+        memory = torch.zeros(
+            batch,
+            self._state_num_heads,
+            self._state_head_dim,
+            self._state_head_dim,
+            device=device,
+            dtype=dtype,
+        )
+        outputs = torch.zeros(
+            batch,
+            seq_len,
+            self._state_num_heads,
+            self._state_head_dim,
+            device=device,
+            dtype=dtype,
+        )
+        scale = 1.0 / math.sqrt(float(self._state_head_dim))
+
+        for t in range(seq_len):
+            q_t = q[:, t, :, :] * scale
+            k_t = k[:, t, :, :]
+            v_t = v[:, t, :, :]
+            memory = decay * memory + torch.einsum("bhd,bhe->bhde", k_t, v_t)
+            outputs[:, t, :, :] = torch.einsum("bhd,bhde->bhe", q_t, memory)
+
+        out = torch.zeros(batch, seq_len, self.config.linear_modes, device=device, dtype=dtype)
+        for head_idx, out_proj in enumerate(self._retention_out):
+            out = out + out_proj(outputs[:, :, head_idx, :])
+        linear_in_proj = self.linear_in_proj.to(device=device, dtype=dtype)
+        return out + self._retention_D * torch.matmul(x_embed, linear_in_proj)
+
+    def _gated_retention_states(self, x_embed: torch.Tensor) -> torch.Tensor:
+        """Primary learned substrate: gated multi-head matrix memory."""
+        batch, seq_len, _ = x_embed.shape
+        device = x_embed.device
+        dtype = x_embed.dtype
+
+        q = torch.stack([layer(x_embed) for layer in self._retention_q], dim=2)
+        k = torch.stack([layer(x_embed) for layer in self._retention_k], dim=2)
+        v = torch.stack([layer(x_embed) for layer in self._retention_v], dim=2)
+
+        base_decay = torch.sigmoid(self._retention_logit_decay).to(device=device, dtype=dtype).view(
+            1, self._state_num_heads, 1, 1
+        )
+        retain = torch.sigmoid(self._gated_retention_retain_gate(x_embed)).to(dtype=dtype).unsqueeze(-1).unsqueeze(-1)
+        write = torch.sigmoid(self._gated_retention_write_gate(x_embed)).to(dtype=dtype).unsqueeze(-1).unsqueeze(-1)
+        erase = torch.sigmoid(self._gated_retention_erase_gate(x_embed)).to(dtype=dtype).unsqueeze(-1).unsqueeze(-1)
+
+        memory = torch.zeros(
+            batch,
+            self._state_num_heads,
+            self._state_head_dim,
+            self._state_head_dim,
+            device=device,
+            dtype=dtype,
+        )
+        outputs = torch.zeros(
+            batch,
+            seq_len,
+            self._state_num_heads,
+            self._state_head_dim,
+            device=device,
+            dtype=dtype,
+        )
+        scale = 1.0 / math.sqrt(float(self._state_head_dim))
+
+        for t in range(seq_len):
+            q_t = q[:, t, :, :] * scale
+            k_t = k[:, t, :, :]
+            v_t = v[:, t, :, :]
+            keep_t = base_decay * retain[:, t, :, :, :] * (1.0 - erase[:, t, :, :, :])
+            write_t = write[:, t, :, :, :]
+            memory = keep_t * memory + write_t * torch.einsum("bhd,bhe->bhde", k_t, v_t)
+            outputs[:, t, :, :] = torch.einsum("bhd,bhde->bhe", q_t, memory)
+
+        out = torch.zeros(batch, seq_len, self.config.linear_modes, device=device, dtype=dtype)
+        for head_idx, out_proj in enumerate(self._retention_out):
+            out = out + out_proj(outputs[:, :, head_idx, :])
+        linear_in_proj = self.linear_in_proj.to(device=device, dtype=dtype)
+        drive = torch.matmul(x_embed, linear_in_proj)
+        return out + self._retention_D * drive
 
     def _apply_substrate(
         self,
@@ -520,6 +674,8 @@ class CausalBankModel(nn.Module):
 
         Returns states [batch, seq, modes].
         """
+        if self._use_gated_retention_substrate:
+            return self._gated_retention_states(x)
         if self._learned_recurrence:
             return self._linear_states_recurrent(drive, x)
         if self.config.linear_impl == "kernel":
@@ -545,7 +701,7 @@ class CausalBankModel(nn.Module):
 
         # Prepare kernels once (used by kernel and learnable_decays paths)
         kernels = None
-        if not self._learned_recurrence and self.config.linear_impl == "kernel":
+        if not self._learned_recurrence and not self._use_gated_retention_substrate and self.config.linear_impl == "kernel":
             if self._recompute_kernel:
                 # Recompute kernel from learnable decays
                 time_idx = self._kernel_time_idx[:timesteps].to(device=x.device)
@@ -590,9 +746,9 @@ class CausalBankModel(nn.Module):
         states = self._apply_mode_gate(states, self._static_bank_mode_gate())
         states = self._apply_mode_gate(states, mode_gate)
 
-        # Augment: selective scan adds content-dependent signal on top of frozen bank
-        if self._use_selective_scan:
-            states = states + self._selective_scan(x)
+        # Augment: recurrent state path adds content-dependent signal on top of the frozen bank
+        if self._use_state_augment:
+            states = states + self._state_augment(x)
 
         return states, x
 
@@ -751,7 +907,7 @@ class CausalBankModel(nn.Module):
             drive = torch.matmul(encoded, linear_in_proj)
 
             kernels = None
-            if not self._learned_recurrence and self.config.linear_impl == "kernel":
+            if not self._learned_recurrence and not self._use_gated_retention_substrate and self.config.linear_impl == "kernel":
                 if self._recompute_kernel:
                     time_idx = self._kernel_time_idx[:n_patches].to(device=encoded.device)
                     delta = time_idx[:, None] - time_idx[None, :]
@@ -773,6 +929,8 @@ class CausalBankModel(nn.Module):
                     states = self._apply_mode_gate(states, self._static_bank_mode_gate())
 
             states = self._apply_mode_gate(states, self._static_bank_mode_gate())
+            if self._use_state_augment:
+                states = states + self._state_augment(encoded)
 
             # Upsample: repeat each patch state for P byte positions
             # Shift by 1 patch: states[t] provides context for bytes in patch[t+1]
@@ -859,15 +1017,15 @@ class CausalBankModel(nn.Module):
         x_enc = self._patch_encoder(x_patched)
 
         # Run the substrate on the patch sequence
-        if self._use_selective_scan:
-            states = self._selective_scan(x_enc)
+        if self._use_state_augment:
+            states = self._state_augment(x_enc)
             states = self._apply_mode_gate(states, self._static_bank_mode_gate())
         else:
             linear_in_proj = self.linear_in_proj.to(device=x_enc.device, dtype=x_enc.dtype)
             drive = torch.matmul(x_enc, linear_in_proj)
             # Use timesteps = n_patches for substrate
             kernels = None
-            if not self._learned_recurrence and self.config.linear_impl == "kernel":
+            if not self._learned_recurrence and not self._use_gated_retention_substrate and self.config.linear_impl == "kernel":
                 if self._recompute_kernel:
                     time_idx = self._kernel_time_idx[:n_patches].to(device=x_enc.device)
                     delta = time_idx[:, None] - time_idx[None, :]

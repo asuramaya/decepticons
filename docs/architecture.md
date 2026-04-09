@@ -232,6 +232,7 @@ descendant family. Its configuration surface includes:
 - `learnable_decays` — decay rates are gradient-tracked parameters
 - `learnable_mixing` — mixing weights are gradient-tracked parameters
 - `learned_recurrence` — full selective scan with Mamba-style input-dependent B/C projections; chunked parallel scan implementation
+- `gated_retention` — learned multi-head matrix memory becomes the primary substrate instead of an additive augment
 
 ### Memory Attachment (`memory_kind` / `MemoryAttachmentConfig`)
 
@@ -251,8 +252,14 @@ interface that updates incrementally during training without a separate build st
 
 ### Selective Scan Dimensions
 
-- `state_dim` — inner state dimension for B/C projections (used with `learned_recurrence`)
-- `num_heads` — number of selective scan heads
+- `state_dim` — inner recurrent state width for the learned-state path
+- `state_impl` — learned-state implementation (`scan` or `retention`)
+- `num_heads` — number of learned-state heads
+- under `gated_retention`, this state surface is promoted from an augment to the primary substrate
+
+### Readout Geometry
+
+- `readout_bands` — split readout by timescale band to reduce interference across the fixed/learned bank mixture
 
 ### Byte-to-Patch Encoding
 
@@ -301,19 +308,19 @@ this wiring.
 
 ## Immediate Architectural Direction
 
-The next real jump is not another single descendant. It is pressure-testing the shared causal, oracle, bridge,
-noncausal, and teacher/export adapters across more than one consumer so the current contract line either holds or
-shrinks.
+The current pressure from the descendant runtime is narrower and more concrete:
 
-That next shared layer now includes a noncausal reconstruction adapter, a paired teacher/export contract, and generic
-artifact-boundary audit helpers. Keep their policy use local even though the contracts now live in `src/`.
+- make learned memory do more of the real work
+- keep the path O(n) in sequence length
+- separate readout wins from actual substrate wins
+- only promote mechanisms that survive scale and longer context
 
-That means:
+For the active causal-bank line that means:
 
-- thinning the causal descendants around the causal adapter
-- keeping the bidirectional-analysis example thin around the oracle adapter
-- hardening the shared runtime/accounting contract
-- keeping bridge export generic while more than one bridge-shaped consumer pushes on it
-- using the noncausal descendants to decide whether the shared noncausal contract should stay narrow or absorb one more seam
+- `readout_bands` to reduce timescale interference at readout
+- `scan` and `retention` as head-factored learned-state paths
+- `gated_retention` as the first primary learned substrate replacing the fixed bank on the cheap lane
+- keeping fleet policy, promotion logic, and benchmark claims in `chronohorn`, not here
 
-That is how the repo graduates from "first shared contracts exist" to "the contracts are actually stable enough to keep."
+The older shared-contract work still matters, but the immediate kernel question is simpler:
+can a reusable learned-memory substrate beat the fixed-bank ceiling without giving up O(n) execution?

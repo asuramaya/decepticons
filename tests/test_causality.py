@@ -76,6 +76,32 @@ def test_readout_bands_is_causal():
     assert violations == [], f"Causality violations:\n" + "\n".join(violations)
 
 
+def test_head_factored_scan_is_causal():
+    cfg = scale_config(CausalBankConfig(state_dim=16, state_impl="scan", num_heads=4), 4.0)
+    model = CausalBankModel(256, cfg)
+    violations = _check_causality(model, vocab_size=256, seq_len=32)
+    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+
+
+def test_retention_augment_is_causal():
+    cfg = scale_config(CausalBankConfig(state_dim=16, state_impl="retention", num_heads=4), 4.0)
+    model = CausalBankModel(256, cfg)
+    violations = _check_causality(model, vocab_size=256, seq_len=32)
+    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+
+
+def test_gated_retention_substrate_is_causal():
+    cfg = scale_config(CausalBankConfig(
+        substrate_mode="gated_retention",
+        state_dim=16,
+        state_impl="retention",
+        num_heads=4,
+    ), 4.0)
+    model = CausalBankModel(256, cfg)
+    violations = _check_causality(model, vocab_size=256, seq_len=32)
+    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+
+
 def test_routed_experts_is_causal():
     cfg = scale_config(CausalBankConfig(
         linear_readout_kind="routed_sqrelu_experts",

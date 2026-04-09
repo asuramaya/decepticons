@@ -17,6 +17,8 @@ It owns:
 - readout interfaces and shared feature views
 - export helpers for descendant systems
 - family-neutral contracts that can be reused by more than one descendant
+- causal-bank config validation and mechanism-level knobs such as `substrate_mode`,
+  `state_impl`, `num_heads`, `readout_bands`, and `fast_lr_mult`
 
 It does not own:
 
@@ -39,6 +41,8 @@ It owns:
 - offline table compilation and packing
 - full-val evaluation
 - fleet and orchestration surfaces
+- family-owned scan regimes and promotion policy
+- VRAM-tier placement and scheduler hints used to spend cheap and expensive GPU lanes differently
 
 Chronohorn may use OPC mechanisms, but it should not re-declare them as a second shared kernel.
 
@@ -81,6 +85,7 @@ The kernel should only carry mechanisms.
 - memory views and scoring helpers
 - readout blocks that are reusable across descendants
 - export-friendly shared tensor layout helpers
+- learned-state substrates such as head-factored `scan`, `retention`, and `gated_retention`
 
 ### Policy that belongs in Chronohorn
 
@@ -91,6 +96,7 @@ The kernel should only carry mechanisms.
 - held-out evaluation policy
 - frontier reporting
 - fleet placement and job scheduling
+- cheap-lane ablation ordering, scale/context-survival promotion, and replication rules
 
 ### Policy that does not belong in OPC
 
@@ -138,6 +144,11 @@ When a mechanism appears in both OPC and Chronohorn, ask:
 Only if the answer is yes should the mechanism move into OPC.
 
 Everything else should stay in Chronohorn as descendant policy.
+
+Concrete example:
+
+- adding `gated_retention` as a reusable causal-bank substrate belongs in `decepticons`
+- emitting `cb-substrate-s8-gret-h4-10k` / `cb-substrate-s12-gret-h4-10k` and deciding when they promote belongs in `chronohorn`
 
 ## Working Rule For The Promoted Causal-Bank Line
 

@@ -4,7 +4,7 @@
   <img src="docs/logo.webp" alt="Decepticons" width="520">
 </p>
 
-O(n) attention is deception. Shared kernel for non-transformer predictive descendants.
+O(n) attention is deception. Shared kernel for predictive descendants that want reusable memory and readout primitives without inheriting one runtime's policy.
 
 `decepticons` extracts reusable model mechanisms from a broader
 experiment family so downstream systems can specialize without forking the
@@ -20,6 +20,8 @@ kernel itself.
 - lightweight runtime and evaluation helpers
 - backend-neutral family metadata and deterministic substrate builders, such as
   `decepticons.causal_bank`
+- primary learned-substrate and augment primitives for the active causal-bank line,
+  including head-factored scan, retention, and gated-retention memory surfaces
 - export helpers and contracts for descendant systems
 
 It is intentionally not a full runtime system:
@@ -128,11 +130,14 @@ stays in the descendant.
 - `causal_bank`
   - backend-neutral causal-bank family metadata and deterministic substrate construction
   - new config fields: `substrate_mode`, `memory_kind`, `num_blocks`, `block_mixing_ratio`,
-    `block_stride`, `state_dim`, `num_heads`, `patch_size`, `patch_causal_decoder`,
+    `block_stride`, `state_dim`, `state_impl`, `num_heads`, `patch_size`, `patch_causal_decoder`,
     `num_hemispheres`, `fast_hemisphere_ratio`, `fast_lr_mult`, `local_poly_order`,
     `substrate_poly_order`, `training_noise`, `adaptive_reg`
+  - readout geometry knobs such as `readout_bands`
   - `learnable_substrate_keys()` helper
-  - chunked parallel scan for `learned_recurrence` substrate mode
+  - chunked parallel scan for `learned_recurrence`
+  - multi-head matrix-memory retention path
+  - `gated_retention` mode where learned matrix memory becomes the primary substrate
 - `bridge_export`, `oracle_analysis`, `teacher_export`
   - descendant-facing boundary helpers
 - `runtime`, `eval`, `train_eval`, `artifacts`
@@ -160,6 +165,12 @@ stays in the descendant.
 ## Scope
 
 This is a research kernel and reference implementation.
+
+The current pressure from `chronohorn` is O(n) causal-bank architecture search:
+
+- cheap `10k` ablation lanes to separate mechanisms before promotion
+- scale/context-survival follow-up in the descendant runtime
+- kernel work centered on better learned memory, not descendant-specific fleet policy
 
 It is not:
 

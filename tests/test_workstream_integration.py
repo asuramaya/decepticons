@@ -122,3 +122,54 @@ def test_frozen_baseline_comparison():
 
     losses = _train_steps(model, steps=20, vocab=256)
     assert _loss_improved(losses), f"loss should improve: {losses}"
+
+
+def test_num_heads_is_not_a_noop_for_scan():
+    """Changing num_heads should change the recurrent augment, not just metadata."""
+    torch.manual_seed(7)
+    chars = torch.randint(0, 256, (2, 32))
+
+    cfg_one = scale_config(CausalBankConfig(state_dim=16, state_impl="scan", num_heads=1), 4.0)
+    cfg_four = scale_config(CausalBankConfig(state_dim=16, state_impl="scan", num_heads=4), 4.0)
+
+    model_one = CausalBankModel(256, cfg_one)
+    model_four = CausalBankModel(256, cfg_four)
+
+    with torch.no_grad():
+        logits_one = model_one(chars)
+        logits_four = model_four(chars)
+
+    assert not torch.allclose(logits_one, logits_four), "num_heads should alter scan behavior"
+
+
+def test_retention_augment_trains():
+    """Retention-style matrix memory should forward, backprop, and improve a little."""
+    cfg = scale_config(CausalBankConfig(
+        state_dim=16,
+        state_impl="retention",
+        num_heads=4,
+        oscillatory_frac=0.0,
+    ), 4.0)
+    model = CausalBankModel(256, cfg)
+
+    losses = _train_steps(model, steps=12, vocab=256, seq_len=32)
+    assert _loss_improved(losses), f"loss should improve: {losses}"
+
+
+def test_gated_retention_substrate_trains_and_uses_primary_memory():
+    """Gated retention should train as the primary substrate, not just an additive augment."""
+    cfg = scale_config(CausalBankConfig(
+        substrate_mode="gated_retention",
+        state_dim=16,
+        state_impl="retention",
+        num_heads=4,
+        oscillatory_frac=0.0,
+    ), 4.0)
+    model = CausalBankModel(256, cfg)
+
+    initial_proj = model.linear_in_proj.data.clone()
+    losses = _train_steps(model, steps=12, vocab=256, seq_len=32)
+    assert _loss_improved(losses), f"loss should improve: {losses}"
+
+    changed = (model.linear_in_proj.data - initial_proj).abs().sum().item()
+    assert changed > 0, "gated retention substrate should update its learned input projection"
