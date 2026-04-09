@@ -212,22 +212,14 @@ class CausalBankModel(nn.Module):
             sd = int(config.state_dim)
             ed = int(config.embedding_dim)
             self._state_head_dim = max(sd // self._state_num_heads, 1)
+            self._state_width = self._state_num_heads * self._state_head_dim
 
             if self._state_impl == "scan" and not self._use_gated_retention_substrate:
                 self._ssm_A = nn.Parameter(torch.zeros(self._state_num_heads, self._state_head_dim))
-                self._ssm_B = nn.ModuleList(
-                    nn.Linear(ed, self._state_head_dim, bias=False)
-                    for _ in range(self._state_num_heads)
-                )
-                self._ssm_C = nn.ModuleList(
-                    nn.Linear(ed, self._state_head_dim, bias=False)
-                    for _ in range(self._state_num_heads)
-                )
+                self._ssm_B_proj = nn.Linear(ed, self._state_width, bias=False)
+                self._ssm_C_proj = nn.Linear(ed, self._state_width, bias=False)
                 self._ssm_D = nn.Parameter(torch.ones(1))
-                self._ssm_out = nn.ModuleList(
-                    nn.Linear(self._state_head_dim, config.linear_modes, bias=False)
-                    for _ in range(self._state_num_heads)
-                )
+                self._ssm_out_proj = nn.Linear(self._state_width, config.linear_modes, bias=False)
 
                 with torch.no_grad():
                     init_decays = torch.linspace(-0.1, -5.0, sd).view(self._state_num_heads, self._state_head_dim)
@@ -244,22 +236,10 @@ class CausalBankModel(nn.Module):
                         if slow_dim > 0:
                             flat[fast_dim:] = torch.linspace(-0.01, -0.5, slow_dim)
             else:
-                self._retention_q = nn.ModuleList(
-                    nn.Linear(ed, self._state_head_dim, bias=False)
-                    for _ in range(self._state_num_heads)
-                )
-                self._retention_k = nn.ModuleList(
-                    nn.Linear(ed, self._state_head_dim, bias=False)
-                    for _ in range(self._state_num_heads)
-                )
-                self._retention_v = nn.ModuleList(
-                    nn.Linear(ed, self._state_head_dim, bias=False)
-                    for _ in range(self._state_num_heads)
-                )
-                self._retention_out = nn.ModuleList(
-                    nn.Linear(self._state_head_dim, config.linear_modes, bias=False)
-                    for _ in range(self._state_num_heads)
-                )
+                self._retention_q_proj = nn.Linear(ed, self._state_width, bias=False)
+                self._retention_k_proj = nn.Linear(ed, self._state_width, bias=False)
+                self._retention_v_proj = nn.Linear(ed, self._state_width, bias=False)
+                self._retention_out_proj = nn.Linear(self._state_width, config.linear_modes, bias=False)
                 self._retention_logit_decay = nn.Parameter(torch.zeros(self._state_num_heads))
                 self._retention_D = nn.Parameter(torch.ones(1))
                 with torch.no_grad():
@@ -383,11 +363,11 @@ class CausalBankModel(nn.Module):
         for name, param in self.named_parameters():
             if (
                 "_ssm_A" in name
-                or "_ssm_B" in name
-                or "_ssm_C" in name
-                or "_retention_q" in name
-                or "_retention_k" in name
-                or "_retention_v" in name
+                or "_ssm_B_proj" in name
+                or "_ssm_C_proj" in name
+                or "_retention_q_proj" in name
+                or "_retention_k_proj" in name
+                or "_retention_v_proj" in name
                 or "_retention_logit_decay" in name
                 or "_gated_retention_retain_gate" in name
                 or "_gated_retention_write_gate" in name
@@ -462,6 +442,38 @@ class CausalBankModel(nn.Module):
             pieces.append(values[1:2].expand(self.osc_mode_count))
         return torch.cat(pieces, dim=0) if pieces else None
 
+    def _chunked_recurrence_scan(self, gates: torch.Tensor, drive: torch.Tensor) -> torch.Tensor:
+        """Chunked parallel scan for recurrences of the form h_t = a_t * h_{t-1} + b_t."""
+        batch, seq_len = drive.shape[:2]
+        state_shape = drive.shape[2:]
+        device = drive.device
+        dtype = drive.dtype
+
+        K = min(32, seq_len)
+        n_chunks = (seq_len + K - 1) // K
+        states = torch.zeros_like(drive)
+        h = torch.zeros((batch, *state_shape), device=device, dtype=dtype)
+
+        for c in range(n_chunks):
+            start = c * K
+            end = min(start + K, seq_len)
+            a_chunk = gates[:, start:end, ...]
+            b_chunk = drive[:, start:end, ...]
+
+            log_a = torch.log(a_chunk.clamp(min=1e-6))
+            log_cum_a = torch.cumsum(log_a, dim=1)
+            cum_a = torch.exp(log_cum_a)
+
+            inv_cum_a = 1.0 / cum_a.clamp(min=1e-8)
+            weighted_b = b_chunk * inv_cum_a
+            cum_wb = torch.cumsum(weighted_b, dim=1)
+
+            chunk_states = cum_a * (h.unsqueeze(1) + cum_wb)
+            states[:, start:end, ...] = chunk_states
+            h = chunk_states[:, -1, ...]
+
+        return states
+
     def _linear_states_recurrent(self, drive: torch.Tensor, x_embed: torch.Tensor) -> torch.Tensor:
         """Learned recurrence: state[t] = gate * state[t-1] + (1-gate) * drive[t]
 
@@ -480,38 +492,7 @@ class CausalBankModel(nn.Module):
             torch.matmul(x_embed, self._gate_weight.to(dtype=dtype)) + self._gate_bias.to(dtype=dtype)
         )
 
-        # Parallel scan using chunked sequential: process in chunks of K
-        # positions. Within each chunk, use the parallel cumsum trick.
-        # Between chunks, carry state forward. K=32 gives good GPU
-        # utilisation while keeping the sequential loop short.
-        b = (1.0 - gates) * drive               # [batch, seq, modes]
-
-        K = min(32, seq_len)
-        n_chunks = (seq_len + K - 1) // K
-        states = torch.zeros(batch, seq_len, modes, device=device, dtype=dtype)
-        h = torch.zeros(batch, modes, device=device, dtype=dtype)
-
-        for c in range(n_chunks):
-            start = c * K
-            end = min(start + K, seq_len)
-            a_chunk = gates[:, start:end, :]     # [batch, chunk, modes]
-            b_chunk = b[:, start:end, :]
-
-            # Within chunk: parallel cumsum in log-space
-            log_a = torch.log(a_chunk.clamp(min=1e-6))
-            log_cum_a = torch.cumsum(log_a, dim=1)
-            cum_a = torch.exp(log_cum_a)
-
-            # h[start+t] = cum_a[t] * h_prev + cum_a[t] * cumsum(b/cum_a)[t]
-            inv_cum_a = 1.0 / cum_a.clamp(min=1e-8)
-            weighted_b = b_chunk * inv_cum_a
-            cum_wb = torch.cumsum(weighted_b, dim=1)
-
-            chunk_states = cum_a * (h.unsqueeze(1) + cum_wb)
-            states[:, start:end, :] = chunk_states
-            h = chunk_states[:, -1, :]
-
-        return states
+        return self._chunked_recurrence_scan(gates, (1.0 - gates) * drive)
 
     def _state_augment(self, x_embed: torch.Tensor) -> torch.Tensor:
         if self._state_impl == "scan":
@@ -524,8 +505,8 @@ class CausalBankModel(nn.Module):
         device = x_embed.device
         dtype = x_embed.dtype
 
-        B = torch.stack([layer(x_embed) for layer in self._ssm_B], dim=2)
-        C = torch.stack([layer(x_embed) for layer in self._ssm_C], dim=2)
+        B = self._ssm_B_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
+        C = self._ssm_C_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
 
         K = min(32, seq_len)
         n_chunks = (seq_len + K - 1) // K
@@ -562,9 +543,7 @@ class CausalBankModel(nn.Module):
             y[:, start:end, :, :] = chunk_y
             h = chunk_states[:, -1, :, :]
 
-        out = torch.zeros(batch, seq_len, self.config.linear_modes, device=device, dtype=dtype)
-        for head_idx, out_proj in enumerate(self._ssm_out):
-            out = out + out_proj(y[:, :, head_idx, :])
+        out = self._ssm_out_proj(y.reshape(batch, seq_len, self._state_width))
         linear_in_proj = self.linear_in_proj.to(device=device, dtype=dtype)
         return out + self._ssm_D * torch.matmul(x_embed, linear_in_proj)
 
@@ -574,41 +553,27 @@ class CausalBankModel(nn.Module):
         device = x_embed.device
         dtype = x_embed.dtype
 
-        q = torch.stack([layer(x_embed) for layer in self._retention_q], dim=2)
-        k = torch.stack([layer(x_embed) for layer in self._retention_k], dim=2)
-        v = torch.stack([layer(x_embed) for layer in self._retention_v], dim=2)
+        q = self._retention_q_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
+        k = self._retention_k_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
+        v = self._retention_v_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
 
+        flat_dim = self._state_head_dim * self._state_head_dim
         decay = torch.sigmoid(self._retention_logit_decay).to(device=device, dtype=dtype).view(
-            1, self._state_num_heads, 1, 1
+            1, 1, self._state_num_heads, 1
         )
-        memory = torch.zeros(
-            batch,
-            self._state_num_heads,
-            self._state_head_dim,
-            self._state_head_dim,
-            device=device,
-            dtype=dtype,
-        )
-        outputs = torch.zeros(
+        scale = 1.0 / math.sqrt(float(self._state_head_dim))
+        drive = torch.einsum("bthd,bthe->bthde", k, v).reshape(batch, seq_len, self._state_num_heads, flat_dim)
+        gates = decay.expand(batch, seq_len, self._state_num_heads, flat_dim)
+        memory = self._chunked_recurrence_scan(gates, drive).reshape(
             batch,
             seq_len,
             self._state_num_heads,
             self._state_head_dim,
-            device=device,
-            dtype=dtype,
+            self._state_head_dim,
         )
-        scale = 1.0 / math.sqrt(float(self._state_head_dim))
+        outputs = torch.einsum("bthd,bthde->bthe", q * scale, memory)
 
-        for t in range(seq_len):
-            q_t = q[:, t, :, :] * scale
-            k_t = k[:, t, :, :]
-            v_t = v[:, t, :, :]
-            memory = decay * memory + torch.einsum("bhd,bhe->bhde", k_t, v_t)
-            outputs[:, t, :, :] = torch.einsum("bhd,bhde->bhe", q_t, memory)
-
-        out = torch.zeros(batch, seq_len, self.config.linear_modes, device=device, dtype=dtype)
-        for head_idx, out_proj in enumerate(self._retention_out):
-            out = out + out_proj(outputs[:, :, head_idx, :])
+        out = self._retention_out_proj(outputs.reshape(batch, seq_len, self._state_width))
         linear_in_proj = self.linear_in_proj.to(device=device, dtype=dtype)
         return out + self._retention_D * torch.matmul(x_embed, linear_in_proj)
 
@@ -618,47 +583,37 @@ class CausalBankModel(nn.Module):
         device = x_embed.device
         dtype = x_embed.dtype
 
-        q = torch.stack([layer(x_embed) for layer in self._retention_q], dim=2)
-        k = torch.stack([layer(x_embed) for layer in self._retention_k], dim=2)
-        v = torch.stack([layer(x_embed) for layer in self._retention_v], dim=2)
+        q = self._retention_q_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
+        k = self._retention_k_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
+        v = self._retention_v_proj(x_embed).reshape(batch, seq_len, self._state_num_heads, self._state_head_dim)
 
+        flat_dim = self._state_head_dim * self._state_head_dim
         base_decay = torch.sigmoid(self._retention_logit_decay).to(device=device, dtype=dtype).view(
-            1, self._state_num_heads, 1, 1
+            1, 1, self._state_num_heads, 1
         )
-        retain = torch.sigmoid(self._gated_retention_retain_gate(x_embed)).to(dtype=dtype).unsqueeze(-1).unsqueeze(-1)
-        write = torch.sigmoid(self._gated_retention_write_gate(x_embed)).to(dtype=dtype).unsqueeze(-1).unsqueeze(-1)
-        erase = torch.sigmoid(self._gated_retention_erase_gate(x_embed)).to(dtype=dtype).unsqueeze(-1).unsqueeze(-1)
+        retain = torch.sigmoid(self._gated_retention_retain_gate(x_embed)).to(dtype=dtype).unsqueeze(-1)
+        write = torch.sigmoid(self._gated_retention_write_gate(x_embed)).to(dtype=dtype).unsqueeze(-1)
+        erase = torch.sigmoid(self._gated_retention_erase_gate(x_embed)).to(dtype=dtype).unsqueeze(-1)
 
-        memory = torch.zeros(
+        scale = 1.0 / math.sqrt(float(self._state_head_dim))
+        keep = base_decay * retain * (1.0 - erase)
+        drive = write * torch.einsum("bthd,bthe->bthde", k, v).reshape(
             batch,
+            seq_len,
             self._state_num_heads,
-            self._state_head_dim,
-            self._state_head_dim,
-            device=device,
-            dtype=dtype,
+            flat_dim,
         )
-        outputs = torch.zeros(
+        memory = self._chunked_recurrence_scan(keep.expand(batch, seq_len, self._state_num_heads, flat_dim), drive)
+        memory = memory.reshape(
             batch,
             seq_len,
             self._state_num_heads,
             self._state_head_dim,
-            device=device,
-            dtype=dtype,
+            self._state_head_dim,
         )
-        scale = 1.0 / math.sqrt(float(self._state_head_dim))
+        outputs = torch.einsum("bthd,bthde->bthe", q * scale, memory)
 
-        for t in range(seq_len):
-            q_t = q[:, t, :, :] * scale
-            k_t = k[:, t, :, :]
-            v_t = v[:, t, :, :]
-            keep_t = base_decay * retain[:, t, :, :, :] * (1.0 - erase[:, t, :, :, :])
-            write_t = write[:, t, :, :, :]
-            memory = keep_t * memory + write_t * torch.einsum("bhd,bhe->bhde", k_t, v_t)
-            outputs[:, t, :, :] = torch.einsum("bhd,bhde->bhe", q_t, memory)
-
-        out = torch.zeros(batch, seq_len, self.config.linear_modes, device=device, dtype=dtype)
-        for head_idx, out_proj in enumerate(self._retention_out):
-            out = out + out_proj(outputs[:, :, head_idx, :])
+        out = self._retention_out_proj(outputs.reshape(batch, seq_len, self._state_width))
         linear_in_proj = self.linear_in_proj.to(device=device, dtype=dtype)
         drive = torch.matmul(x_embed, linear_in_proj)
         return out + self._retention_D * drive
@@ -718,6 +673,8 @@ class CausalBankModel(nn.Module):
             else:
                 kernels = self.linear_kernel[:, :timesteps, :timesteps].to(device=x.device, dtype=x.dtype)
 
+        static_mode_gate = self._static_bank_mode_gate()
+
         # First substrate application
         states = self._apply_substrate(drive, x, timesteps, kernels)
 
@@ -741,9 +698,9 @@ class CausalBankModel(nn.Module):
                 else:
                     mixed = states + block_layer(states)
                     states = self._apply_substrate(mixed, x, timesteps, kernels)
-                states = self._apply_mode_gate(states, self._static_bank_mode_gate())
+                states = self._apply_mode_gate(states, static_mode_gate)
 
-        states = self._apply_mode_gate(states, self._static_bank_mode_gate())
+        states = self._apply_mode_gate(states, static_mode_gate)
         states = self._apply_mode_gate(states, mode_gate)
 
         # Augment: recurrent state path adds content-dependent signal on top of the frozen bank
@@ -810,11 +767,8 @@ class CausalBankModel(nn.Module):
             return x
         pad = torch.zeros((batch, window - 1, dim), dtype=x.dtype, device=x.device)
         padded = torch.cat([pad, x], dim=1)
-        views = []
-        for offset in range(window):
-            start = window - 1 - offset
-            views.append(padded[:, start : start + timesteps, :])
-        return torch.cat(views, dim=-1)
+        windows = padded.unfold(dimension=1, size=window, step=1)
+        return windows.permute(0, 1, 3, 2).reshape(batch, timesteps, window * dim)
 
     def _expand_poly_features(self, local_features: torch.Tensor) -> torch.Tensor:
         """Expand local window features with polynomial terms (NVAR-style)."""
@@ -920,15 +874,16 @@ class CausalBankModel(nn.Module):
                 elif self.linear_kernel is not None:
                     kernels = self.linear_kernel[:, :n_patches, :n_patches].to(device=encoded.device, dtype=encoded.dtype)
 
+            static_mode_gate = self._static_bank_mode_gate()
             states = self._apply_substrate(drive, encoded, n_patches, kernels)
 
             if self.num_blocks > 1 and hasattr(self, '_block_layers'):
                 for block_layer in self._block_layers:
                     mixed = states + block_layer(states)
                     states = self._apply_substrate(mixed, encoded, n_patches, kernels)
-                    states = self._apply_mode_gate(states, self._static_bank_mode_gate())
+                    states = self._apply_mode_gate(states, static_mode_gate)
 
-            states = self._apply_mode_gate(states, self._static_bank_mode_gate())
+            states = self._apply_mode_gate(states, static_mode_gate)
             if self._use_state_augment:
                 states = states + self._state_augment(encoded)
 
@@ -940,7 +895,6 @@ class CausalBankModel(nn.Module):
                 states[:, :-1, :],
             ], dim=1)  # [batch, n_patches, modes]
             upsampled_states = shifted.repeat_interleave(P, dim=1)  # [batch, seq, modes]
-            encoded.repeat_interleave(P, dim=1)[:, :seq_len, :]
 
             # Patch-level features per byte position
             features = torch.cat([upsampled_states, embed], dim=-1)
@@ -1017,9 +971,10 @@ class CausalBankModel(nn.Module):
         x_enc = self._patch_encoder(x_patched)
 
         # Run the substrate on the patch sequence
+        static_mode_gate = self._static_bank_mode_gate()
         if self._use_state_augment:
             states = self._state_augment(x_enc)
-            states = self._apply_mode_gate(states, self._static_bank_mode_gate())
+            states = self._apply_mode_gate(states, static_mode_gate)
         else:
             linear_in_proj = self.linear_in_proj.to(device=x_enc.device, dtype=x_enc.dtype)
             drive = torch.matmul(x_enc, linear_in_proj)
@@ -1041,7 +996,7 @@ class CausalBankModel(nn.Module):
                     kernels = self.linear_kernel[:, :n_patches, :n_patches].to(device=x_enc.device, dtype=x_enc.dtype)
 
             states = self._apply_substrate(drive, x_enc, n_patches, kernels)
-            states = self._apply_mode_gate(states, self._static_bank_mode_gate())
+            states = self._apply_mode_gate(states, static_mode_gate)
 
         # Readout features: [batch, n_patches, modes + embed_dim]
         readout_input = torch.cat([states, x_enc], dim=-1)
