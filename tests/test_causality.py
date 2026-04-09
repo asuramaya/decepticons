@@ -45,49 +45,49 @@ def test_frozen_substrate_is_causal():
     cfg = scale_config(CausalBankConfig(substrate_mode="frozen"), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)
 
 
 def test_learnable_mixing_is_causal():
     cfg = scale_config(CausalBankConfig(substrate_mode="learnable_mixing"), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)
 
 
 def test_learnable_decays_is_causal():
     cfg = scale_config(CausalBankConfig(substrate_mode="learnable_decays"), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)
 
 
 def test_selective_scan_augment_is_causal():
     cfg = scale_config(CausalBankConfig(state_dim=8), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)
 
 
 def test_readout_bands_is_causal():
     cfg = scale_config(CausalBankConfig(readout_bands=4), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)
 
 
 def test_head_factored_scan_is_causal():
     cfg = scale_config(CausalBankConfig(state_dim=16, state_impl="scan", num_heads=4), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)
 
 
 def test_retention_augment_is_causal():
     cfg = scale_config(CausalBankConfig(state_dim=16, state_impl="retention", num_heads=4), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)
 
 
 def test_gated_retention_substrate_is_causal():
@@ -99,7 +99,7 @@ def test_gated_retention_substrate_is_causal():
     ), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)
 
 
 def test_gated_delta_substrate_is_causal():
@@ -111,7 +111,7 @@ def test_gated_delta_substrate_is_causal():
     ), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)
 
 
 def test_routed_experts_is_causal():
@@ -121,4 +121,4 @@ def test_routed_experts_is_causal():
     ), 4.0)
     model = CausalBankModel(256, cfg)
     violations = _check_causality(model, vocab_size=256, seq_len=32)
-    assert violations == [], f"Causality violations:\n" + "\n".join(violations)
+    assert violations == [], "Causality violations:\n" + "\n".join(violations)

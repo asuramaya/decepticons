@@ -21,7 +21,6 @@ def diagnose(model, tokens, *, vocab_size: int = 1024) -> dict[str, Any]:  # noq
 
     was_training = model.training
     model.eval()  # noqa: S307
-    config = model.config
     results: dict[str, Any] = {}
 
     # --- Mode liveness: which modes have non-trivial activation variance? ---

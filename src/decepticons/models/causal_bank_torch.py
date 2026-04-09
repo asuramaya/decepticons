@@ -502,7 +502,6 @@ class CausalBankModel(nn.Module):
         Returns: [batch, seq, modes]
         """
         batch, seq_len, modes = drive.shape
-        device = drive.device
         dtype = drive.dtype
 
         # Compute gates for all positions at once: [batch, seq, modes]
