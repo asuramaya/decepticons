@@ -21,7 +21,7 @@ CAUSAL_BANK_OSCILLATORY_SCHEDULES = (
     "mincorr_greedy",
     "period_bucket_greedy",
 )
-CAUSAL_BANK_READOUT_KINDS = ("mlp", "tied_recursive", "routed_sqrelu_experts", "recurrent")
+CAUSAL_BANK_READOUT_KINDS = ("mlp", "tied_recursive", "routed_sqrelu_experts", "tied_embed_readout", "recurrent")
 CAUSAL_BANK_INPUT_PROJ_SCHEMES = ("random", "orthogonal_rows", "split_banks", "kernel_energy")
 CAUSAL_BANK_STATE_IMPLS = ("scan", "retention")
 
@@ -83,6 +83,20 @@ class CausalBankConfig:
     patch_causal_decoder: str = "none"  # "none", "autoregressive", "mlp_factored"
     trust_routing: bool = False  # enable trust-routing mode
     table_path: str = ""  # path to packed n-gram table
+    sticky_registers: int = 0  # number of persistent memory registers (0=off, 64=typical)
+    sticky_half_life: float = 1000.0  # decay half-life for sticky registers (very slow)
+    band_experts: tuple[int, ...] = ()  # per-band expert count override (empty=uniform, 0=static bias)
+    # Substrate transforms (session 8)
+    magnitude_normalize: bool = False  # kill position counter via L2 normalization
+    magnitude_keep: bool = True  # preserve log-magnitude as side feature
+    overwrite_gate: bool = False  # per-mode gate that erases stale state
+    mode_selector: bool = False  # per-token soft attention over modes
+    temporal_attention: bool = False  # cross-attention over substrate snapshots
+    temporal_snapshot_interval: int = 64  # snapshot interval for temporal attention
+    temporal_attention_heads: int = 2  # number of attention heads
+    temporal_attention_head_dim: int = 32  # head dimension
+    substrate_bank_router: bool = False  # route tokens to substrate banks
+    substrate_n_banks: int = 4  # number of substrate banks
 
 
 @dataclass(frozen=True)

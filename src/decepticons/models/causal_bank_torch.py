@@ -20,9 +20,17 @@ from .readouts_torch import (
     MLP,
     GRUReadout,
     RoutedSquaredReLUReadout,
+    TiedEmbedReadout,
     TiedRecursiveReadout,
     _copy_embedding_,
     _copy_linear_,
+)
+from .substrate_transforms import (
+    MagnitudeNormalizer,
+    ModeSelector,
+    OverwriteGate,
+    SubstrateBankRouter,
+    TemporalAttention,
 )
 
 __all__ = [
@@ -114,6 +122,17 @@ class CausalBankModel(nn.Module):
                 )
             elif config.linear_readout_kind == "recurrent":
                 self.linear_readout = GRUReadout(linear_readout_in_dim, vocab_size, config)
+            elif config.linear_readout_kind == "tied_embed_readout":
+                if len(config.linear_hidden) != 1:
+                    raise ValueError(
+                        "causal-bank tied_embed_readout expects exactly one hidden width."
+                    )
+                self.linear_readout = TiedEmbedReadout(
+                    linear_readout_in_dim,
+                    config.linear_hidden[0],
+                    config.embedding_dim,
+                    config.linear_readout_num_experts,
+                )
             else:
                 if len(config.linear_hidden) != 1:
                     raise ValueError(
@@ -131,10 +150,72 @@ class CausalBankModel(nn.Module):
                 band_size = config.linear_modes // n_bands
                 band_in_dim = band_size + config.embedding_dim
                 band_hidden = tuple(h // n_bands for h in config.linear_hidden)
-                self._band_readouts = nn.ModuleList([
-                    MLP(band_in_dim, band_hidden, vocab_size)
-                    for _ in range(n_bands)
-                ])
+                readout_kind = getattr(config, 'linear_readout_kind', 'mlp')
+                # Per-band expert counts: () = uniform, (8,4,2,0) = asymmetric, 0 = static bias
+                _band_experts = getattr(config, 'band_experts', ())
+                if not _band_experts:
+                    _band_experts = tuple([config.linear_readout_num_experts] * n_bands)
+                _band_readouts = []
+                _static_band_indices = []
+                for bi in range(n_bands):
+                    n_exp = _band_experts[bi] if bi < len(_band_experts) else config.linear_readout_num_experts
+                    if n_exp == 0:
+                        # Static band: learnable bias vector, no forward computation
+                        _static_band_indices.append(bi)
+                        _band_readouts.append(nn.Linear(config.embedding_dim, vocab_size))
+                    elif readout_kind == "tied_recursive":
+                        _band_readouts.append(
+                            TiedRecursiveReadout(band_in_dim, band_hidden[0], vocab_size, config.linear_readout_depth))
+                    elif readout_kind == "tied_embed_readout" and n_exp >= 2:
+                        _band_readouts.append(
+                            TiedEmbedReadout(band_in_dim, band_hidden[0], config.embedding_dim, n_exp))
+                    elif readout_kind == "routed_sqrelu_experts" and n_exp >= 2:
+                        _band_readouts.append(
+                            RoutedSquaredReLUReadout(band_in_dim, band_hidden[0], vocab_size, n_exp))
+                    else:
+                        _band_readouts.append(MLP(band_in_dim, band_hidden, vocab_size))
+                self._band_readouts = nn.ModuleList(_band_readouts)
+                self._static_band_indices = set(_static_band_indices)
+
+            # Write-side transforms: route and overwrite (before/during substrate)
+            self._use_substrate_bank_router = getattr(config, 'substrate_bank_router', False)
+            self._substrate_n_banks = getattr(config, 'substrate_n_banks', 4)
+            if self._use_substrate_bank_router:
+                self._substrate_bank_router = SubstrateBankRouter(
+                    config.embedding_dim,
+                    self._substrate_n_banks,
+                )
+
+            self._use_overwrite_gate = getattr(config, 'overwrite_gate', False)
+            if self._use_overwrite_gate:
+                self._overwrite_gate = OverwriteGate(
+                    config.embedding_dim,
+                    config.linear_modes,
+                )
+
+            # Read-side transforms: normalize, select, attend (after substrate)
+            self._use_magnitude_norm = getattr(config, 'magnitude_normalize', False)
+            if self._use_magnitude_norm:
+                self._magnitude_normalizer = MagnitudeNormalizer(
+                    config.linear_modes,
+                    keep_magnitude=getattr(config, 'magnitude_keep', True),
+                )
+
+            self._use_mode_selector = getattr(config, 'mode_selector', False)
+            if self._use_mode_selector:
+                self._mode_selector = ModeSelector(
+                    config.embedding_dim,
+                    config.linear_modes,
+                )
+
+            self._use_temporal_attention = getattr(config, 'temporal_attention', False)
+            self._temporal_snapshot_interval = getattr(config, 'temporal_snapshot_interval', 64)
+            if self._use_temporal_attention:
+                self._temporal_attention = TemporalAttention(
+                    config.linear_modes,
+                    num_heads=getattr(config, 'temporal_attention_heads', 2),
+                    head_dim=getattr(config, 'temporal_attention_head_dim', 32),
+                )
 
             # Substrate polynomial expansion
             self._substrate_poly = getattr(config, 'substrate_poly_order', 1)
@@ -276,6 +357,26 @@ class CausalBankModel(nn.Module):
                         self._gated_retention_write_gate.bias.fill_(-1.0)
                         self._gated_retention_erase_gate.bias.fill_(-2.0)
 
+        # --- Sticky registers: persistent memory for surprising tokens ---
+        self._sticky_registers = getattr(config, "sticky_registers", 0)
+        if self._sticky_registers > 0:
+            nr = self._sticky_registers
+            ed = config.embedding_dim
+            # Write gate: embedding → scalar write strength per register
+            self._sticky_write_gate = nn.Linear(ed, nr)
+            # Write value: embedding → register content
+            self._sticky_write_proj = nn.Linear(ed, nr)
+            # Read projection: registers → linear_modes (adds to substrate states)
+            self._sticky_read_proj = nn.Linear(nr, config.linear_modes, bias=False)
+            # Decay: very slow, derived from config half-life
+            sticky_hl = getattr(config, "sticky_half_life", 1000.0)
+            sticky_decay = float(np.exp(np.log(0.5) / max(sticky_hl, 1.0)))
+            self.register_buffer("_sticky_decay", torch.tensor(sticky_decay, dtype=torch.float32))
+            with torch.no_grad():
+                # Init write gate biased toward NOT writing (most tokens aren't surprising)
+                self._sticky_write_gate.bias.fill_(-2.0)
+                self._sticky_write_gate.weight.zero_()
+
         # --- Patch encoding ---
         self._patch_size = getattr(config, 'patch_size', 1)
         self._patch_causal_mode = getattr(config, 'patch_causal_decoder', 'none')
@@ -337,7 +438,23 @@ class CausalBankModel(nn.Module):
             # Gate: scalar learned mix weight, initialised to 0 so memory has no effect at init
             self._memory_gate = nn.Parameter(torch.tensor(0.0))
 
+        # Wire shared embedding weight into TiedEmbedReadout instances
+        self._wire_tied_embed_readouts()
+
         self._reset_trainable_parameters()
+
+    def _wire_tied_embed_readouts(self) -> None:
+        """Wire the shared embedding weight into all TiedEmbedReadout modules."""
+        embed = self.shared_embedding or self.linear_embedding
+        if embed is None:
+            return
+        weight = embed.weight
+        if isinstance(self.linear_readout, TiedEmbedReadout):
+            self.linear_readout.set_embedding_weight(weight)
+        if hasattr(self, '_band_readouts'):
+            for readout in self._band_readouts:
+                if isinstance(readout, TiedEmbedReadout):
+                    readout.set_embedding_weight(weight)
 
     def _reset_trainable_parameters(self) -> None:
         seed = int(self.config.init_seed)
@@ -732,8 +849,16 @@ class CausalBankModel(nn.Module):
 
         static_mode_gate = self._static_bank_mode_gate()
 
+        # Write-side: route drive signal to substrate banks before EMA
+        if getattr(self, '_use_substrate_bank_router', False):
+            drive = self._substrate_bank_router(drive, x)
+
         # First substrate application
         states = self._apply_substrate(drive, x, timesteps, kernels)
+
+        # Write-side: overwrite stale modes after EMA
+        if getattr(self, '_use_overwrite_gate', False):
+            states = self._overwrite_gate(states, drive, x)
 
         # Stacked blocks: mix then re-apply substrate
         block_stride = getattr(self.config, 'block_stride', 1)
@@ -764,7 +889,35 @@ class CausalBankModel(nn.Module):
         if self._use_state_augment:
             states = states + self._state_augment(x)
 
+        # Sticky registers: persistent memory for surprising tokens
+        if self._sticky_registers > 0:
+            states = states + self._sticky_register_forward(x)
+
         return states, x
+
+    def _sticky_register_forward(self, x_embed: torch.Tensor) -> torch.Tensor:
+        """Run sticky registers: slow-decay memory with surprise-gated writes.
+
+        Uses the chunked parallel scan (same as gated_delta/selective_scan)
+        for O(n) compute with vectorized chunks instead of a Python per-position loop.
+
+        Recurrence: reg_t = keep_t * reg_{t-1} + write_t * value_t
+          where keep_t = decay * (1 - write_strength_t)
+
+        Returns: [batch, seq, linear_modes] contribution to add to states.
+        """
+        decay = self._sticky_decay.to(device=x_embed.device, dtype=x_embed.dtype)
+
+        # Write strength: sigmoid(embed → nr), biased toward NOT writing
+        write_strength = torch.sigmoid(self._sticky_write_gate(x_embed))  # [batch, seq, nr]
+        write_value = self._sticky_write_proj(x_embed)  # [batch, seq, nr]
+
+        # Map to chunked_recurrence_scan form: h_t = a_t * h_{t-1} + b_t
+        gates = (decay * (1.0 - write_strength)).clamp(min=1e-6, max=1.0 - 1e-6)  # [batch, seq, nr]
+        drive = write_strength * write_value  # [batch, seq, nr]
+
+        reg_states = self._chunked_recurrence_scan(gates, drive)  # [batch, seq, nr]
+        return self._sticky_read_proj(reg_states)  # [batch, seq, linear_modes]
 
     def _compute_online_memory_features(self, chars: torch.Tensor) -> torch.Tensor:
         """Process sequence through the online causal memory, returning projected features.
@@ -791,16 +944,31 @@ class CausalBankModel(nn.Module):
         if noise_sigma > 0 and self.training:
             states = states + torch.randn_like(states) * noise_sigma
 
+        # Apply substrate transforms
+        if getattr(self, '_use_magnitude_norm', False):
+            states = self._magnitude_normalizer(states)
+        if getattr(self, '_use_mode_selector', False):
+            states = self._mode_selector(states, x)
+        if getattr(self, '_use_temporal_attention', False):
+            bank = TemporalAttention.build_bank(states, self._temporal_snapshot_interval)
+            temporal_ctx = self._temporal_attention(states, bank)
+            states = states + temporal_ctx
+
         n_bands = getattr(self.config, 'readout_bands', 1)
         if n_bands > 1 and hasattr(self, '_band_readouts'):
             # Grouped prediction: split modes by timescale, separate readout per band
             modes = states.shape[-1]
             band_size = modes // n_bands
             band_logits = []
+            _static = getattr(self, '_static_band_indices', set())
             for i, readout in enumerate(self._band_readouts):
-                band_states = states[..., i * band_size : (i + 1) * band_size]
-                band_features = torch.cat([band_states, x], dim=-1)
-                band_logits.append(readout(band_features))
+                if i in _static:
+                    # Static band: embedding-only lookup, no substrate
+                    band_logits.append(readout(x))
+                else:
+                    band_states = states[..., i * band_size : (i + 1) * band_size]
+                    band_features = torch.cat([band_states, x], dim=-1)
+                    band_logits.append(readout(band_features))
             return sum(band_logits)
 
         features = torch.cat([states, x], dim=-1)
@@ -1188,6 +1356,19 @@ class CausalBankModel(nn.Module):
             reg = reg + diversity_loss * 0.1
 
         return reg * scale
+
+    def band_balance_loss(self) -> torch.Tensor:
+        """Sum balance_loss() from all band readouts that are RoutedSquaredReLUReadout.
+
+        Returns 0 if no expert bands exist.
+        """
+        if not hasattr(self, '_band_readouts'):
+            return torch.tensor(0.0, device=next(self.parameters()).device)
+        total = torch.tensor(0.0, device=next(self.parameters()).device)
+        for readout in self._band_readouts:
+            if isinstance(readout, RoutedSquaredReLUReadout):
+                total = total + readout.balance_loss()
+        return total
 
     def forward_with_mode_gate(self, chars: torch.Tensor, mode_gate: torch.Tensor | None) -> torch.Tensor:
         logits_linear = self._linear_logits(chars, mode_gate=mode_gate) if self.config.enable_linear else None

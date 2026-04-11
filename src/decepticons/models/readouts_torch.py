@@ -91,6 +91,8 @@ class RoutedSquaredReLUReadout(nn.Module):
         self._in_dim = in_dim
         self._hidden_dim = hidden_dim
         self._out_dim = out_dim
+        # Cached for balance_loss() — populated during forward()
+        self._last_route: torch.Tensor | None = None
 
     def _stack_weights(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Stack expert weights into contiguous tensors for batched matmul."""
@@ -120,8 +122,118 @@ class RoutedSquaredReLUReadout(nn.Module):
 
         # Route: softmax over experts, then weighted sum
         route = torch.softmax(self.router(x_flat), dim=-1)             # [N, E]
+        self._last_route = route
         out = torch.einsum("ne,neo->no", route, logits.permute(1, 0, 2))
         return out.reshape(*shape, self._out_dim)
+
+    def balance_loss(self) -> torch.Tensor:
+        """Switch Transformer load-balancing auxiliary loss.
+
+        Encourages uniform expert utilization by penalizing the correlation
+        between routing fraction and routing probability per expert.
+
+        Returns: scalar loss = num_experts * sum(f_i * P_i)
+          where f_i = fraction of tokens assigned to expert i (hard argmax)
+                P_i = mean routing probability for expert i (soft, differentiable)
+
+        Should be multiplied by a coefficient (e.g. 0.01) and added to the
+        main loss. Only meaningful during training; returns 0 if no cached route.
+        """
+        if self._last_route is None:
+            return torch.tensor(0.0)
+        route = self._last_route  # [N, E]
+        # f_i: fraction of tokens where expert i has highest probability
+        assignments = route.detach().argmax(dim=-1)  # [N]
+        f = torch.zeros(self.num_experts, device=route.device, dtype=route.dtype)
+        for e in range(self.num_experts):
+            f[e] = (assignments == e).float().mean()
+        # P_i: mean routing probability per expert (differentiable)
+        P = route.mean(dim=0)  # [E]
+        return self.num_experts * (f * P).sum()
+
+    def reset_parameters_with_seed(self, seed: int, prefix: str) -> None:
+        router_weight = _xavier_uniform(tuple(self.router.weight.shape), _rng_for(seed, f"{prefix}.router.weight"))
+        _copy_linear_(self.router, router_weight)
+        for index, (expert_in, expert_out) in enumerate(zip(self.experts_in, self.experts_out)):
+            in_weight = _xavier_uniform(tuple(expert_in.weight.shape), _rng_for(seed, f"{prefix}.experts_in.{index}.weight"))
+            out_weight = _xavier_uniform(tuple(expert_out.weight.shape), _rng_for(seed, f"{prefix}.experts_out.{index}.weight"))
+            _copy_linear_(expert_in, in_weight)
+            _copy_linear_(expert_out, out_weight)
+
+
+class TiedEmbedReadout(nn.Module):
+    """Readout that projects to embedding space, then multiplies by embed.T for logits.
+
+    Instead of Linear(hidden, vocab_size) per expert, each expert uses
+    Linear(hidden, embed_dim). Logits = expert_output @ embedding.weight.T.
+    The embedding matrix is shared — total vocab-dependent cost is one
+    (vocab_size, embed_dim) matrix instead of num_experts * (vocab_size, hidden).
+    """
+
+    def __init__(self, in_dim: int, hidden_dim: int, embed_dim: int, num_experts: int):
+        super().__init__()
+        if num_experts < 2:
+            raise ValueError("TiedEmbedReadout requires at least 2 experts.")
+        self.router = nn.Linear(in_dim, num_experts)
+        self.num_experts = num_experts
+        self.experts_in = nn.ModuleList(nn.Linear(in_dim, hidden_dim) for _ in range(num_experts))
+        self.experts_out = nn.ModuleList(nn.Linear(hidden_dim, embed_dim) for _ in range(num_experts))
+        self._in_dim = in_dim
+        self._hidden_dim = hidden_dim
+        self._embed_dim = embed_dim
+        # The embedding weight is set externally via set_embedding_weight()
+        self._embedding_weight: torch.Tensor | None = None
+        self._last_route: torch.Tensor | None = None
+
+    def set_embedding_weight(self, weight: torch.Tensor) -> None:
+        """Register the shared embedding matrix for logit computation.
+
+        Called by the model constructor after both the embedding and readout
+        are created. The weight is NOT owned by this module — it's a reference
+        to the embedding layer's weight.
+        """
+        self._embedding_weight = weight
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if self._embedding_weight is None:
+            raise RuntimeError("TiedEmbedReadout: call set_embedding_weight() before forward()")
+
+        W_in = torch.stack([e.weight for e in self.experts_in])    # [E, H, I]
+        b_in = torch.stack([e.bias for e in self.experts_in])      # [E, H]
+        W_out = torch.stack([e.weight for e in self.experts_out])  # [E, D, H]
+        b_out = torch.stack([e.bias for e in self.experts_out])    # [E, D]
+
+        shape = x.shape[:-1]
+        x_flat = x.reshape(-1, self._in_dim)                       # [N, I]
+
+        x_exp = x_flat.unsqueeze(0).expand(self.num_experts, -1, -1)  # [E, N, I]
+        hidden = torch.bmm(x_exp, W_in.transpose(1, 2))              # [E, N, H]
+        hidden = hidden + b_in.unsqueeze(1)
+        hidden = torch.relu(hidden)
+        hidden = hidden * hidden  # squared ReLU
+
+        embed_proj = torch.bmm(hidden, W_out.transpose(1, 2))        # [E, N, D]
+        embed_proj = embed_proj + b_out.unsqueeze(1)
+
+        # Route
+        route = torch.softmax(self.router(x_flat), dim=-1)            # [N, E]
+        self._last_route = route
+        # Weighted sum in embedding space
+        mixed = torch.einsum("ne,end->nd", route, embed_proj)         # [N, D]
+        # Project to vocab via shared embedding
+        logits = mixed @ self._embedding_weight.T                     # [N, V]
+        return logits.reshape(*shape, self._embedding_weight.shape[0])
+
+    def balance_loss(self) -> torch.Tensor:
+        if self._last_route is None:
+            return torch.tensor(0.0)
+        route = self._last_route
+        assignments = route.detach().argmax(dim=-1)
+        f = torch.zeros(self.num_experts, device=route.device, dtype=route.dtype)
+        for e in range(self.num_experts):
+            f[e] = (assignments == e).float().mean()
+        P = route.mean(dim=0)
+        return self.num_experts * (f * P).sum()
 
     def reset_parameters_with_seed(self, seed: int, prefix: str) -> None:
         router_weight = _xavier_uniform(tuple(self.router.weight.shape), _rng_for(seed, f"{prefix}.router.weight"))
