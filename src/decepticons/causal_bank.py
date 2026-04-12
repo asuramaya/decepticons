@@ -98,6 +98,9 @@ class CausalBankConfig:
     substrate_bank_router: bool = False  # route tokens to substrate banks
     substrate_n_banks: int = 4  # number of substrate banks
     tied_readout_normalize: bool = False  # normalize embedding in tied readout (separate norm/direction roles)
+    hash_memory: bool = False  # hash-indexed token memory for order-preserving retrieval
+    hash_memory_slots: int = 64  # number of memory slots
+    hash_memory_dim: int = 64  # dimension of each memory slot
 
 
 @dataclass(frozen=True)

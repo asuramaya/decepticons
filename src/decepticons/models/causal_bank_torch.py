@@ -16,6 +16,7 @@ from decepticons.causal_bank import (
 )
 
 from .common import _embedding_uniform, _rng_for, _xavier_uniform
+from .hash_memory import HashMemory
 from .readouts_torch import (
     MLP,
     GRUReadout,
@@ -217,6 +218,15 @@ class CausalBankModel(nn.Module):
                     config.linear_modes,
                     num_heads=getattr(config, 'temporal_attention_heads', 2),
                     head_dim=getattr(config, 'temporal_attention_head_dim', 32),
+                )
+
+            # Hash memory: order-preserving token retrieval
+            self._use_hash_memory = getattr(config, 'hash_memory', False)
+            if self._use_hash_memory:
+                self._hash_memory = HashMemory(
+                    config.embedding_dim,
+                    memory_dim=getattr(config, 'hash_memory_dim', 64),
+                    num_slots=getattr(config, 'hash_memory_slots', 64),
                 )
 
             # Substrate polynomial expansion
@@ -960,6 +970,11 @@ class CausalBankModel(nn.Module):
             bank = TemporalAttention.build_bank(states, self._temporal_snapshot_interval)
             temporal_ctx = self._temporal_attention(states, bank, snapshot_interval=self._temporal_snapshot_interval)
             states = states + temporal_ctx
+
+        # Hash memory: add retrieved past token context to embedding
+        if getattr(self, '_use_hash_memory', False):
+            hash_ctx = self._hash_memory(x)
+            x = x + hash_ctx
 
         n_bands = getattr(self.config, 'readout_bands', 1)
         if n_bands > 1 and hasattr(self, '_band_readouts'):
