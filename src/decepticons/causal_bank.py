@@ -97,6 +97,7 @@ class CausalBankConfig:
     temporal_attention_head_dim: int = 32  # head dimension
     substrate_bank_router: bool = False  # route tokens to substrate banks
     substrate_n_banks: int = 4  # number of substrate banks
+    tied_readout_normalize: bool = False  # normalize embedding in tied readout (separate norm/direction roles)
 
 
 @dataclass(frozen=True)

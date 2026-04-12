@@ -132,6 +132,7 @@ class CausalBankModel(nn.Module):
                     config.linear_hidden[0],
                     config.embedding_dim,
                     config.linear_readout_num_experts,
+                    normalize_embed=getattr(config, 'tied_readout_normalize', False),
                 )
             else:
                 if len(config.linear_hidden) != 1:
@@ -168,7 +169,8 @@ class CausalBankModel(nn.Module):
                             TiedRecursiveReadout(band_in_dim, band_hidden[0], vocab_size, config.linear_readout_depth))
                     elif readout_kind == "tied_embed_readout" and n_exp >= 2:
                         _band_readouts.append(
-                            TiedEmbedReadout(band_in_dim, band_hidden[0], config.embedding_dim, n_exp))
+                            TiedEmbedReadout(band_in_dim, band_hidden[0], config.embedding_dim, n_exp,
+                                             normalize_embed=getattr(config, 'tied_readout_normalize', False)))
                     elif readout_kind == "routed_sqrelu_experts" and n_exp >= 2:
                         _band_readouts.append(
                             RoutedSquaredReLUReadout(band_in_dim, band_hidden[0], vocab_size, n_exp))

@@ -114,3 +114,21 @@ def byte_difficulty_from_model(
     token_ids = np.zeros(len(losses), dtype=np.int32)
 
     return byte_difficulty(losses, token_ids, byte_lens)
+
+
+def embedding_difficulty(embedding_weight: np.ndarray) -> np.ndarray:
+    """Extract per-token difficulty from embedding norms.
+
+    Heinrich found embedding norm correlates r=0.99 with substrate
+    displacement. The model already encodes difficulty in its embeddings.
+    This is instant (one weight read) vs byte_difficulty_from_model
+    (200 forward passes).
+
+    Args:
+        embedding_weight: float32 [vocab_size, embed_dim] — the embedding matrix.
+
+    Returns:
+        float32 [vocab_size] — per-token difficulty (L2 norm of embedding).
+    """
+    w = np.asarray(embedding_weight, dtype=np.float32)
+    return np.linalg.norm(w, axis=-1)

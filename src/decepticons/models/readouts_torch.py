@@ -168,9 +168,15 @@ class TiedEmbedReadout(nn.Module):
     Linear(hidden, embed_dim). Logits = expert_output @ embedding.weight.T.
     The embedding matrix is shared — total vocab-dependent cost is one
     (vocab_size, embed_dim) matrix instead of num_experts * (vocab_size, hidden).
+
+    When normalize_embed=True, the embedding is L2-normalized before the
+    logit matmul. This separates the embedding's two roles:
+    - Substrate input: full vector (norm encodes difficulty, direction encodes identity)
+    - Readout output: direction only (norm stripped, no input/output conflict)
     """
 
-    def __init__(self, in_dim: int, hidden_dim: int, embed_dim: int, num_experts: int):
+    def __init__(self, in_dim: int, hidden_dim: int, embed_dim: int, num_experts: int,
+                 *, normalize_embed: bool = False):
         super().__init__()
         if num_experts < 2:
             raise ValueError("TiedEmbedReadout requires at least 2 experts.")
@@ -181,6 +187,7 @@ class TiedEmbedReadout(nn.Module):
         self._in_dim = in_dim
         self._hidden_dim = hidden_dim
         self._embed_dim = embed_dim
+        self._normalize_embed = normalize_embed
         # The embedding weight is set externally via set_embedding_weight()
         self._embedding_weight: torch.Tensor | None = None
         self._last_route: torch.Tensor | None = None
@@ -220,8 +227,11 @@ class TiedEmbedReadout(nn.Module):
         self._last_route = route
         # Weighted sum in embedding space
         mixed = torch.einsum("ne,end->nd", route, embed_proj)         # [N, D]
-        # Project to vocab via shared embedding
-        logits = mixed @ self._embedding_weight.T                     # [N, V]
+        # Project to vocab via shared embedding (optionally normalized)
+        embed_w = self._embedding_weight
+        if self._normalize_embed:
+            embed_w = torch.nn.functional.normalize(embed_w, dim=-1)
+        logits = mixed @ embed_w.T                                    # [N, V]
         return logits.reshape(*shape, self._embedding_weight.shape[0])
 
     def balance_loss(self) -> torch.Tensor:
