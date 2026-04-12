@@ -809,6 +809,11 @@ class CausalBankModel(nn.Module):
             return self._gated_delta_states(x)
         if self._learned_recurrence:
             return self._linear_states_recurrent(drive, x)
+        if self.config.linear_impl == "scan":
+            # O(n) chunked parallel scan — same as kernel but without materializing the full matrix
+            decays = self.linear_decays.to(device=drive.device, dtype=drive.dtype)
+            gates = decays.unsqueeze(0).unsqueeze(0).expand(drive.shape[0], timesteps, -1)
+            return self._chunked_recurrence_scan(gates, drive)
         if self.config.linear_impl == "kernel":
             if kernels is None:
                 raise RuntimeError("causal-bank kernel path called without kernels.")

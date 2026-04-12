@@ -118,7 +118,7 @@ def validate_config(config: CausalBankConfig) -> None:
         raise ValueError("causal-bank must enable at least one path.")
     if config.mix_mode not in {"additive", "gated"}:
         raise ValueError(f"Unknown causal-bank mix_mode: {config.mix_mode}")
-    if config.linear_impl not in {"kernel", "fft"}:
+    if config.linear_impl not in {"kernel", "fft", "scan"}:
         raise ValueError(f"Unknown causal-bank linear_impl: {config.linear_impl}")
     if config.input_proj_scheme not in CAUSAL_BANK_INPUT_PROJ_SCHEMES:
         raise ValueError(f"Unknown causal-bank input_proj_scheme: {config.input_proj_scheme}")
