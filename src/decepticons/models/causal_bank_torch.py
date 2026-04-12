@@ -958,7 +958,7 @@ class CausalBankModel(nn.Module):
             states = self._mode_selector(states, x)
         if getattr(self, '_use_temporal_attention', False):
             bank = TemporalAttention.build_bank(states, self._temporal_snapshot_interval)
-            temporal_ctx = self._temporal_attention(states, bank)
+            temporal_ctx = self._temporal_attention(states, bank, snapshot_interval=self._temporal_snapshot_interval)
             states = states + temporal_ctx
 
         n_bands = getattr(self.config, 'readout_bands', 1)

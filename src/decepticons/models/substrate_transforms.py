@@ -211,10 +211,12 @@ class TemporalAttention(nn.Module):
         self,
         query: torch.Tensor,
         bank: torch.Tensor,
+        snapshot_interval: int | None = None,
     ) -> torch.Tensor:
         """
         query: [batch, seq, state_dim] — current substrate states
         bank:  [batch, M, state_dim]   — snapshot memory bank
+        snapshot_interval: spacing between snapshots (for causal masking)
         returns: [batch, seq, state_dim] — attended context
         """
         batch, seq, _ = query.shape
@@ -229,6 +231,14 @@ class TemporalAttention(nn.Module):
 
         # Attention: [batch, heads, seq, M]
         attn = (q @ k.transpose(-2, -1)) * self._scale
+
+        # Causal mask: position t can only attend to snapshots taken at positions <= t
+        if snapshot_interval is not None and snapshot_interval > 0:
+            snapshot_positions = torch.arange(0, seq, snapshot_interval, device=query.device)[:M]
+            query_positions = torch.arange(seq, device=query.device)
+            causal_mask = query_positions[:, None] >= snapshot_positions[None, :]  # [seq, M]
+            attn = attn.masked_fill(~causal_mask[None, None, :, :], float("-inf"))
+
         attn = torch.softmax(attn, dim=-1)
 
         # Aggregate: [batch, heads, seq, head_dim]
