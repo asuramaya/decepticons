@@ -44,45 +44,57 @@ class HashMemory(nn.Module):
         device = embeddings.device
         dtype = embeddings.dtype
 
-        # Initialize empty memory per sequence
-        memory = torch.zeros(batch, self.num_slots, self.memory_dim, device=device, dtype=dtype)
-        # Track which slots have been written to (for masking empty slots)
-        written = torch.zeros(batch, self.num_slots, device=device, dtype=torch.bool)
-
-        outputs = torch.zeros(batch, seq, embed_dim, device=device, dtype=dtype)
-
         # Project all embeddings for writing and querying upfront
         write_vals = self.write_proj(embeddings)  # [batch, seq, memory_dim]
         read_queries = self.read_query(embeddings)  # [batch, seq, memory_dim]
 
+        # Build memory states without in-place ops (autograd-safe)
+        # For each position t, memory contains write_vals from positions that hash to each slot
+        # and were written before t
+        output_list: list[torch.Tensor] = []
+
+        # Pre-compute which positions map to which slots
+        slot_assignments = [t % self.num_slots for t in range(seq)]
+
         for t in range(seq):
-            # READ: attend over memory with current query
+            # Build memory snapshot at time t: contains all writes from positions < t
+            if t == 0:
+                # No past writes — output zero
+                output_list.append(torch.zeros(batch, embed_dim, device=device, dtype=dtype))
+                continue
+
+            # Gather the most recent write for each slot from positions < t
+            slot_contents = []
+            slot_valid = []
+            for s in range(self.num_slots):
+                # Find the latest position < t that maps to slot s
+                latest = -1
+                for past_t in range(t - 1, -1, -1):
+                    if slot_assignments[past_t] == s:
+                        latest = past_t
+                        break
+                if latest >= 0:
+                    slot_contents.append(write_vals[:, latest, :])
+                    slot_valid.append(True)
+                else:
+                    slot_contents.append(torch.zeros(batch, self.memory_dim, device=device, dtype=dtype))
+                    slot_valid.append(False)
+
+            memory = torch.stack(slot_contents, dim=1)  # [batch, num_slots, memory_dim]
+            valid_mask = torch.tensor(slot_valid, device=device, dtype=torch.bool)
+
+            # READ: attend over memory
             q = read_queries[:, t, :]  # [batch, memory_dim]
-            # Similarity with all slots: [batch, num_slots]
             sim = torch.bmm(
-                q.unsqueeze(1),  # [batch, 1, memory_dim]
-                memory.transpose(1, 2),  # [batch, memory_dim, num_slots]
-            ).squeeze(1) * self._scale  # [batch, num_slots]
+                q.unsqueeze(1),
+                memory.transpose(1, 2),
+            ).squeeze(1) * self._scale
 
-            # Mask unwritten slots
-            sim = sim.masked_fill(~written, float("-inf"))
-
-            # Softmax attention (all -inf → uniform zeros after softmax, which is fine)
-            attn = torch.softmax(sim, dim=-1)  # [batch, num_slots]
-            # Handle all-masked case (first position, no writes yet)
+            sim = sim.masked_fill(~valid_mask.unsqueeze(0).expand(batch, -1), float("-inf"))
+            attn = torch.softmax(sim, dim=-1)
             attn = attn.nan_to_num(0.0)
 
-            # Retrieve: [batch, memory_dim]
-            retrieved = torch.bmm(
-                attn.unsqueeze(1),  # [batch, 1, num_slots]
-                memory,  # [batch, num_slots, memory_dim]
-            ).squeeze(1)
+            retrieved = torch.bmm(attn.unsqueeze(1), memory).squeeze(1)
+            output_list.append(self.read_out(retrieved))
 
-            outputs[:, t, :] = self.read_out(retrieved)
-
-            # WRITE: store current token at hashed address
-            addr = t % self.num_slots
-            memory[:, addr, :] = write_vals[:, t, :]
-            written[:, addr] = True
-
-        return outputs
+        return torch.stack(output_list, dim=1)
