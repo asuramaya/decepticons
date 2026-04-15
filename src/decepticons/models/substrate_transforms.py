@@ -55,6 +55,7 @@ class OverwriteGate(nn.Module):
         returns: [..., n_modes] — gated state
         """
         gate = torch.sigmoid(self.gate_proj(embed))  # [..., n_modes]
+        self._last_gate_values = gate.detach()
         return gate * drive + (1.0 - gate) * states
 
 
@@ -123,6 +124,7 @@ class MagnitudeNormalizer(nn.Module):
     def forward(self, states: torch.Tensor) -> torch.Tensor:
         """states: [..., n_modes] -> [..., n_modes] (+ optional magnitude channel)"""
         norm = states.norm(dim=-1, keepdim=True).clamp(min=self.eps)
+        self._last_pre_norm = norm.detach()  # [..., 1]
         normalized = states / norm
         if self.keep_magnitude:
             mag_weight = torch.sigmoid(self._mag_gate)
@@ -155,6 +157,7 @@ class ModeSelector(nn.Module):
         returns: [..., n_modes] — mode-selected substrate
         """
         weights = torch.sigmoid(self.proj(embed) / self.temperature)  # [..., n_modes]
+        self._last_weights = weights.detach()
         return states * weights
 
 
@@ -240,11 +243,14 @@ class TemporalAttention(nn.Module):
             attn = attn.masked_fill(~causal_mask[None, None, :, :], float("-inf"))
 
         attn = torch.softmax(attn, dim=-1)
+        self._last_attn_weights = attn.detach()  # [batch, heads, seq, M]
 
         # Aggregate: [batch, heads, seq, head_dim]
         out = attn @ v
         out = out.transpose(1, 2).reshape(batch, seq, self.num_heads * self.head_dim)
-        return self.out_proj(out)
+        result = self.out_proj(out)
+        self._last_output = result.detach()  # [batch, seq, state_dim]
+        return result
 
     @staticmethod
     def build_bank(

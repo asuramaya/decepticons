@@ -101,6 +101,15 @@ class CausalBankConfig:
     hash_memory: bool = False  # hash-indexed token memory for order-preserving retrieval
     hash_memory_slots: int = 64  # number of memory slots
     hash_memory_dim: int = 64  # dimension of each memory slot
+    complex_rotation: bool = False  # input-dependent rotation in gated delta (SO(2), commutative)
+    lasso_rotation: bool = False  # 2x2 matrix transition per mode pair (noncommutative, encodes order)
+    quaternion_rotation: bool = False  # Hamilton product rotation per mode quad (SO(3), noncommutative, associative)
+    quintic_rotation: bool = False  # 5×5 block matrix transition (GL(5), non-solvable — UNSTABLE, use so5)
+    so5_rotation: bool = False  # SO(5) via Lie algebra exp: skew-symmetric → matrix_exp → guaranteed rotation
+    adaptive_substrate: bool = False  # minimal recurrence: 5 projections, complex-valued, no local/bands/heads
+    hrr_omega_init: bool = False  # HRR binding: init omega bias as uniform Fourier basis [0, 2π)
+    freeze_omega: bool = False  # freeze omega projection — fixed Fourier dynamics, order from physics not optimization
+    position_signal: bool = False  # feed log(1+t) into gate/lasso projections (breaks shift invariance)
 
 
 @dataclass(frozen=True)

@@ -100,27 +100,28 @@ def build_vocab(
         )
 
     # Extract all pieces and their frequencies
-    candidates: list[tuple[bytes, float, float]] = []  # (piece_bytes, freq_score, diff_score)
+    # Store both the raw bytes (for difficulty scoring) and the original piece string (for SPM output)
+    candidates: list[tuple[bytes, str, float, float]] = []  # (piece_bytes, piece_str, freq_score, diff_score)
     sp_vocab_size = sp.vocab_size()
     for token_id in range(sp_vocab_size):
         if sp.is_control(token_id) or sp.is_unknown(token_id) or sp.is_unused(token_id):
             continue
-        piece = sp.id_to_piece(token_id)
-        # Convert piece to raw bytes (remove sentencepiece's space marker)
-        piece_bytes = piece.encode("utf-8").replace(b"\xe2\x96\x81", b" ")
+        piece_str = sp.id_to_piece(token_id)
+        # Convert to raw bytes for difficulty scoring
+        piece_bytes = piece_str.encode("utf-8").replace(b"\xe2\x96\x81", b" ")
         if sp.is_byte(token_id):
-            piece_bytes = bytes([sp.piece_to_id(piece) - 3]) if len(piece_bytes) == 1 else piece_bytes
+            piece_bytes = bytes([token_id - 3]) if token_id >= 3 and token_id < 259 else piece_bytes
 
         freq_score = sp.get_score(token_id)  # log-probability (higher = more frequent)
         diff_score = score_piece(piece_bytes, bigram_diff)
-        candidates.append((piece_bytes, freq_score, diff_score))
+        candidates.append((piece_bytes, piece_str, freq_score, diff_score))
 
     if not candidates:
         return []
 
     # Normalize scores to [0, 1] range
-    freq_scores = np.array([c[1] for c in candidates], dtype=np.float32)
-    diff_scores = np.array([c[2] for c in candidates], dtype=np.float32)
+    freq_scores = np.array([c[2] for c in candidates], dtype=np.float32)
+    diff_scores = np.array([c[3] for c in candidates], dtype=np.float32)
 
     # Frequency: higher is better (more common = more useful to merge)
     freq_min, freq_max = freq_scores.min(), freq_scores.max()
@@ -132,18 +133,28 @@ def build_vocab(
     diff_range = diff_max - diff_min
     diff_norm = 1.0 - (diff_scores - diff_min) / diff_range if diff_range > 0 else np.ones_like(diff_scores)
 
-    # Combined score: higher is better
-    combined = (1.0 - difficulty_weight) * freq_norm + difficulty_weight * diff_norm
+    # Compression gain: how many bytes does this piece save vs byte-level encoding?
+    compression_gains = np.array(
+        [max(len(c[0]) - 1, 0) for c in candidates], dtype=np.float32
+    )
+    comp_max = compression_gains.max()
+    comp_norm = compression_gains / comp_max if comp_max > 0 else np.ones_like(compression_gains)
+
+    # Combined score: compression × frequency × (1 / difficulty)
+    # Higher = merge sooner. Long, frequent, easy pieces score highest.
+    combined = comp_norm * (
+        (1.0 - difficulty_weight) * freq_norm + difficulty_weight * diff_norm
+    )
 
     # Sort by combined score (best first), keep top vocab_size
     # Always keep byte tokens (first 256) regardless of score
-    byte_pieces = []
-    merge_pieces = []
-    for i, (piece_bytes, _, _) in enumerate(candidates):
+    byte_pieces: list[tuple[str, float]] = []
+    merge_pieces: list[tuple[str, float]] = []
+    for i, (piece_bytes, piece_str, _, _) in enumerate(candidates):
         if len(piece_bytes) == 1:
-            byte_pieces.append((piece_bytes, float("inf")))  # always keep
+            byte_pieces.append((piece_str, float("inf")))  # always keep
         else:
-            merge_pieces.append((piece_bytes, float(combined[i])))
+            merge_pieces.append((piece_str, float(combined[i])))
 
     merge_pieces.sort(key=lambda x: x[1], reverse=True)
 
