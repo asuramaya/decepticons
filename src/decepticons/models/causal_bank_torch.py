@@ -105,11 +105,24 @@ class CausalBankModel(nn.Module):
                 self._recompute_kernel = False
                 self.linear_kernel = None
             linear_readout_in_dim = config.linear_modes + config.embedding_dim
+            _patch_n = int(getattr(config, 'patch_n', 1))
+            if _patch_n < 1:
+                raise ValueError(f"patch_n must be >= 1, got {_patch_n}")
+            if _patch_n > 1:
+                if config.linear_readout_kind in ("tied_recursive", "tied_embed_readout", "recurrent"):
+                    raise ValueError(
+                        f"patch_n>1 not supported with linear_readout_kind={config.linear_readout_kind!r}. "
+                        "Supported: 'mlp', 'routed_sqrelu_experts'."
+                    )
+                if getattr(config, 'readout_bands', 1) > 1:
+                    raise ValueError("patch_n>1 not supported with readout_bands>1.")
+            self._patch_n = _patch_n
+            _readout_out_dim = vocab_size * _patch_n
             if config.linear_readout_kind == "mlp":
                 self.linear_readout = MLP(
                     linear_readout_in_dim,
                     config.linear_hidden,
-                    vocab_size,
+                    _readout_out_dim,
                 )
             elif config.linear_readout_kind == "tied_recursive":
                 if len(config.linear_hidden) != 1:
@@ -119,11 +132,11 @@ class CausalBankModel(nn.Module):
                 self.linear_readout = TiedRecursiveReadout(
                     linear_readout_in_dim,
                     config.linear_hidden[0],
-                    vocab_size,
+                    _readout_out_dim,
                     config.linear_readout_depth,
                 )
             elif config.linear_readout_kind == "recurrent":
-                self.linear_readout = GRUReadout(linear_readout_in_dim, vocab_size, config)
+                self.linear_readout = GRUReadout(linear_readout_in_dim, _readout_out_dim, config)
             elif config.linear_readout_kind == "tied_embed_readout":
                 if len(config.linear_hidden) != 1:
                     raise ValueError(
@@ -144,7 +157,7 @@ class CausalBankModel(nn.Module):
                 self.linear_readout = RoutedSquaredReLUReadout(
                     linear_readout_in_dim,
                     config.linear_hidden[0],
-                    vocab_size,
+                    _readout_out_dim,
                     config.linear_readout_num_experts,
                 )
             # Banded readout: split modes by timescale, one readout per band
@@ -1742,13 +1755,25 @@ class CausalBankModel(nn.Module):
         mem_features = torch.stack(mem_features_list).to(device=device)  # [batch, seq, 7]
         return torch.sigmoid(self._memory_gate) * self._memory_proj(mem_features)
 
+    def _reshape_patch_logits(self, out: torch.Tensor) -> torch.Tensor:
+        n = getattr(self, '_patch_n', 1)
+        if n <= 1:
+            return out
+        b, t, flat = out.shape
+        if flat % n != 0:
+            raise RuntimeError(
+                f"Readout output dim {flat} not divisible by patch_n={n}; "
+                "readout was not constructed with vocab * patch_n."
+            )
+        return out.reshape(b, t, n, flat // n)
+
     def _linear_logits(self, chars: torch.Tensor, mode_gate: torch.Tensor | None = None) -> torch.Tensor:
         # Adaptive substrate: bypass all transforms, bands, local path.
         # The recurrence IS the model. The readout reads the result directly.
         if getattr(self, '_use_adaptive_substrate', False):
             x_embed = self._embed_linear(chars)
             features = self._adaptive_substrate_states(x_embed)
-            return self.linear_readout(features)
+            return self._reshape_patch_logits(self.linear_readout(features))
 
         states, x = self._linear_states(chars, mode_gate=mode_gate)
         noise_sigma = getattr(self.config, 'training_noise', 0.0)
@@ -1785,7 +1810,7 @@ class CausalBankModel(nn.Module):
                     band_states = states[..., i * band_size : (i + 1) * band_size]
                     band_features = torch.cat([band_states, x], dim=-1)
                     band_logits.append(readout(band_features))
-            return sum(band_logits)
+            return self._reshape_patch_logits(sum(band_logits))
 
         features = torch.cat([states, x], dim=-1)
         if getattr(self, '_substrate_poly', 1) >= 2:
@@ -1799,7 +1824,7 @@ class CausalBankModel(nn.Module):
             features = torch.cat([features] + poly_parts, dim=-1)
         if self._use_online_memory:
             features = features + self._compute_online_memory_features(chars)
-        return self.linear_readout(features)
+        return self._reshape_patch_logits(self.linear_readout(features))
 
     def _local_window_stack(self, x: torch.Tensor) -> torch.Tensor:
         batch, timesteps, dim = x.shape
