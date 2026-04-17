@@ -115,6 +115,7 @@ class CausalBankConfig:
     freeze_omega: bool = False  # freeze omega projection — fixed Fourier dynamics, order from physics not optimization
     position_signal: bool = False  # feed log(1+t) into gate/lasso projections (breaks shift invariance)
     patch_n: int = 1  # patch-at-readout: predict N bytes per forward. 1 = off (default).
+    ortho_reg_coeff: float = 0.0  # Ortho regularization on adaptive omega_proj.weight (off-diagonal Gram penalty). 0 = off.
 
 
 @dataclass(frozen=True)
