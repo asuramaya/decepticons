@@ -114,6 +114,7 @@ class CausalBankConfig:
     use_triton_scan: bool = False  # Use fused Triton Hillis-Steele scan for adaptive substrate (21× over F.pad)
     freeze_omega: bool = False  # freeze omega projection — fixed Fourier dynamics, order from physics not optimization
     position_signal: bool = False  # feed log(1+t) into gate/lasso projections (breaks shift invariance)
+    patch_n: int = 1  # patch-at-readout: predict N bytes per forward. 1 = off (default).
 
 
 @dataclass(frozen=True)
