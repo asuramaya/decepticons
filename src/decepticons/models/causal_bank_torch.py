@@ -5,6 +5,7 @@ import math
 import numpy as np
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from decepticons.causal_bank import (
     CausalBankConfig,
@@ -357,7 +358,23 @@ class CausalBankModel(nn.Module):
                         self._gated_delta_rotation_proj = nn.Linear(ed, self._state_num_heads * self._rotation_half_dim)
                         with torch.no_grad():
                             self._gated_delta_rotation_proj.weight.zero_()
-                            self._gated_delta_rotation_proj.bias.zero_()
+                            # HRR on the rotation path: bias the per-pair rotation angle
+                            # to a Fourier basis (linspace(0, 2π)). This is the lasso-speed
+                            # analogue of the adaptive-substrate HRR trick — forces each
+                            # rotating mode-pair to start at a distinct frequency, breaking
+                            # dimensional collapse on the readout side.
+                            # Bias is tanh'd and scaled to [-π, π] in forward, so we write
+                            # the pre-tanh raw angles. atanh(ω/π) = pre-tanh.
+                            if getattr(config, "hrr_rotation_angle_init", False):
+                                import math as _math
+                                n_pairs = self._state_num_heads * self._rotation_half_dim
+                                # Target post-tanh angles: linspace(-π, π) evenly.
+                                # Map through inverse: pre = atanh(target/π). Clip to avoid ±inf.
+                                target = torch.linspace(-_math.pi * 0.98, _math.pi * 0.98, n_pairs)
+                                pre_tanh = torch.atanh(target / _math.pi)
+                                self._gated_delta_rotation_proj.bias.copy_(pre_tanh)
+                            else:
+                                self._gated_delta_rotation_proj.bias.zero_()
                     # Lasso rotation: 2x2 matrix transition per mode pair.
                     # Noncommutative — "A B" ≠ "B A" because 2x2 matmul doesn't commute.
                     # Like a lasso: rotation plane tilts based on input, and the composition
@@ -526,39 +543,115 @@ class CausalBankModel(nn.Module):
         if self._use_adaptive_substrate:
             ed = int(config.embedding_dim)
             n_modes = int(config.linear_modes)
-            # 5 projections: decay, omega, write, project_real, project_imag
-            self._adaptive_decay_proj = nn.Linear(ed, n_modes)
-            self._adaptive_omega_proj = nn.Linear(ed, n_modes)
-            self._adaptive_write_proj = nn.Linear(ed, n_modes)
-            self._adaptive_proj_real = nn.Linear(ed, n_modes, bias=False)
-            self._adaptive_proj_imag = nn.Linear(ed, n_modes, bias=False)
+            self._adaptive_shared_proj = getattr(config, "adaptive_shared_proj", False)
+            # Optional low-rank factorization of each head: Linear(n_modes, n_modes)
+            # → Sequential(Linear(n_modes, R), Linear(R, n_modes)). At n_modes=768
+            # with R=128 this is ~6× fewer params and FLOPs per head. The 5 heads
+            # dominate the adaptive-substrate's projection cost, so this is the
+            # single biggest speed lever without architectural change.
+            _head_rank = int(getattr(config, "adaptive_head_rank", 0) or 0)
+            self._adaptive_head_rank = _head_rank
+
+            def _head(in_features, out_features, bias=True):
+                if _head_rank > 0 and _head_rank < min(in_features, out_features):
+                    # Sequential low-rank: [in → R] (no bias) then [R → out] (optional bias)
+                    return nn.Sequential(
+                        nn.Linear(in_features, _head_rank, bias=False),
+                        nn.Linear(_head_rank, out_features, bias=bias),
+                    )
+                return nn.Linear(in_features, out_features, bias=bias)
+
+            if self._adaptive_shared_proj:
+                # Shared trunk: one big matmul, then 5 cheap linear heads.
+                # 1 matmul (ed→n_modes) + 5 heads (n_modes→n_modes) vs 5 matmuls (ed→n_modes).
+                # At ed=256, n_modes=1024: 262k + 5*1M = 5.3M vs 5*262k = 1.3M params.
+                # But at ed=256, n_modes=128: 33k + 5*16k = 113k — actually fewer params.
+                # The win is fewer LARGE matmuls: 1 instead of 5 through embed_dim.
+                self._adaptive_trunk = nn.Linear(ed, n_modes)
+                self._adaptive_head_decay = _head(n_modes, n_modes, bias=True)
+                self._adaptive_head_omega = _head(n_modes, n_modes, bias=True)
+                self._adaptive_head_write = _head(n_modes, n_modes, bias=True)
+                self._adaptive_head_real = _head(n_modes, n_modes, bias=False)
+                self._adaptive_head_imag = _head(n_modes, n_modes, bias=False)
+            else:
+                # 5 independent projections: decay, omega, write, project_real, project_imag
+                self._adaptive_decay_proj = nn.Linear(ed, n_modes)
+                self._adaptive_omega_proj = nn.Linear(ed, n_modes)
+                self._adaptive_write_proj = nn.Linear(ed, n_modes)
+                self._adaptive_proj_real = nn.Linear(ed, n_modes, bias=False)
+                self._adaptive_proj_imag = nn.Linear(ed, n_modes, bias=False)
             # Output projection: 2*n_modes (real+imag) + embed_dim → readout_in_dim
             self._adaptive_out_proj = nn.Linear(2 * n_modes + ed, config.linear_modes + ed)
-            with torch.no_grad():
-                # Init decay near 0.95 (moderate memory)
-                self._adaptive_decay_proj.weight.zero_()
-                self._adaptive_decay_proj.bias.fill_(3.0)  # sigmoid(3) ≈ 0.95
-                # Omega init: zero (pure EMA) or HRR Fourier basis
-                self._adaptive_omega_proj.weight.zero_()
-                if getattr(config, "hrr_omega_init", False):
-                    # HRR binding: uniform Fourier basis [0, 2π).
-                    # Each mode gets a unique rotation frequency.
-                    # The state IS a discrete Fourier transform of the input.
-                    # Readout demodulates by combining real/imag at each frequency.
-                    import math
-                    self._adaptive_omega_proj.bias.copy_(
-                        torch.linspace(0, 2 * math.pi * (1 - 1/n_modes), n_modes)
-                    )
-                    # Frozen omega: the dynamics provide order FOR FREE.
-                    # No optimization needed — the Fourier basis IS the physics.
-                    if getattr(config, "freeze_omega", False):
-                        self._adaptive_omega_proj.weight.requires_grad_(False)
-                        self._adaptive_omega_proj.bias.requires_grad_(False)
+            def _init_head_bias_like_eye(head, bias_value, n_modes):
+                """Init head so output ≈ input + bias_value.
+
+                Full-rank Linear: weight = I, bias = bias_value (exact).
+                Low-rank Sequential: two xavier-random layers for coupling,
+                final bias = bias_value. Output is a noisy projection of
+                input plus bias — preserves bias-dominated init scale but
+                loses exact identity pass-through.
+                """
+                if isinstance(head, nn.Sequential):
+                    nn.init.xavier_normal_(head[0].weight)
+                    nn.init.xavier_normal_(head[1].weight)
+                    # Scale down so the low-rank product has output magnitude
+                    # similar to identity (prevents init from dominating bias).
+                    head[1].weight.mul_(0.1)
+                    if head[1].bias is not None:
+                        if isinstance(bias_value, torch.Tensor):
+                            head[1].bias.copy_(bias_value)
+                        else:
+                            head[1].bias.fill_(bias_value)
                 else:
-                    self._adaptive_omega_proj.bias.zero_()
-                # Init write near 0.1 (conservative writes)
-                self._adaptive_write_proj.weight.zero_()
-                self._adaptive_write_proj.bias.fill_(-2.0)  # sigmoid(-2) ≈ 0.12
+                    head.weight.copy_(torch.eye(n_modes))
+                    if head.bias is not None:
+                        if isinstance(bias_value, torch.Tensor):
+                            head.bias.copy_(bias_value)
+                        else:
+                            head.bias.fill_(bias_value)
+
+            def _set_omega_freeze(head):
+                """Freeze omega parameters (Fourier basis, no training)."""
+                if isinstance(head, nn.Sequential):
+                    for layer in head:
+                        for p in layer.parameters():
+                            p.requires_grad_(False)
+                else:
+                    head.weight.requires_grad_(False)
+                    if head.bias is not None:
+                        head.bias.requires_grad_(False)
+
+            with torch.no_grad():
+                if self._adaptive_shared_proj:
+                    _init_head_bias_like_eye(self._adaptive_head_decay, 3.0, n_modes)
+                    if getattr(config, "hrr_omega_init", False):
+                        import math
+                        _fourier = torch.linspace(0, 2 * math.pi * (1 - 1/n_modes), n_modes)
+                        _init_head_bias_like_eye(self._adaptive_head_omega, _fourier, n_modes)
+                        if getattr(config, "freeze_omega", False):
+                            _set_omega_freeze(self._adaptive_head_omega)
+                    else:
+                        _init_head_bias_like_eye(self._adaptive_head_omega, 0.0, n_modes)
+                    _init_head_bias_like_eye(self._adaptive_head_write, -2.0, n_modes)
+                else:
+                    # Init decay near 0.95 (moderate memory)
+                    self._adaptive_decay_proj.weight.zero_()
+                    self._adaptive_decay_proj.bias.fill_(3.0)  # sigmoid(3) ≈ 0.95
+                    # Omega init: zero (pure EMA) or HRR Fourier basis
+                    self._adaptive_omega_proj.weight.zero_()
+                    if getattr(config, "hrr_omega_init", False):
+                        import math
+                        self._adaptive_omega_proj.bias.copy_(
+                            torch.linspace(0, 2 * math.pi * (1 - 1/n_modes), n_modes)
+                        )
+                        if getattr(config, "freeze_omega", False):
+                            self._adaptive_omega_proj.weight.requires_grad_(False)
+                            self._adaptive_omega_proj.bias.requires_grad_(False)
+                    else:
+                        self._adaptive_omega_proj.bias.zero_()
+                    # Init write near 0.1 (conservative writes)
+                    self._adaptive_write_proj.weight.zero_()
+                    self._adaptive_write_proj.bias.fill_(-2.0)  # sigmoid(-2) ≈ 0.12
 
         # Online causal memory (only useful with the linear path)
         self._use_online_memory = (
@@ -687,6 +780,7 @@ class CausalBankModel(nn.Module):
         return self.local_embedding(chars)
 
     def _linear_states_fft(self, drive: torch.Tensor, timesteps: int) -> torch.Tensor:
+        drive = drive.float()  # FFT precision: fp16 causes ringing artifacts
         drive_mb = drive.transpose(1, 2)
         n_fft = 1 << int(math.ceil(math.log2(max(2 * timesteps - 1, 1))))
         time = torch.arange(timesteps, dtype=drive.dtype, device=drive.device)
@@ -719,6 +813,9 @@ class CausalBankModel(nn.Module):
 
     def _chunked_recurrence_scan(self, gates: torch.Tensor, drive: torch.Tensor) -> torch.Tensor:
         """Chunked parallel scan for recurrences of the form h_t = a_t * h_{t-1} + b_t."""
+        # Force fp32 — cumulative products lose precision in fp16
+        gates = gates.float()
+        drive = drive.float()
         batch, seq_len = drive.shape[:2]
         state_shape = drive.shape[2:]
         device = drive.device
@@ -749,6 +846,74 @@ class CausalBankModel(nn.Module):
 
         return states
 
+    def _hierarchical_scan(
+        self,
+        gates: torch.Tensor,
+        drive: torch.Tensor,
+        n_levels: int = 3,
+    ) -> torch.Tensor:
+        """Tree-structured scan: fast modes update every position, slow modes every K.
+
+        Modes are split into n_levels groups by half-life. Level 0 (fastest)
+        updates at every position. Level i updates every 2^i positions by
+        reading aggregated input from level i-1.
+
+        This gives O(modes * seq / n_levels) effective work instead of
+        O(modes * seq), with slow modes amortized across chunks.
+
+        gates: [batch, seq, n_heads, head_dim] — per-position decay
+        drive: [batch, seq, n_heads, head_dim] — per-position input
+        """
+        gates = gates.float()
+        drive = drive.float()
+        batch, seq_len, n_heads, head_dim = drive.shape
+        device = drive.device
+
+        modes_per_level = head_dim // n_levels
+        remainder = head_dim - modes_per_level * n_levels
+        states = torch.zeros_like(drive)
+
+        for level in range(n_levels):
+            start_dim = level * modes_per_level
+            end_dim = start_dim + modes_per_level + (remainder if level == n_levels - 1 else 0)
+            level_gates = gates[..., start_dim:end_dim]
+            level_drive = drive[..., start_dim:end_dim]
+
+            stride = 1 << level  # level 0: every pos, level 1: every 2, level 2: every 4
+            if stride == 1:
+                # Fastest modes: full-resolution scan
+                states[..., start_dim:end_dim] = self._chunked_recurrence_scan(
+                    level_gates, level_drive,
+                )
+            else:
+                # Slower modes: subsample, scan, interpolate back
+                # Subsample at stride boundaries
+                indices = torch.arange(0, seq_len, stride, device=device)
+                n_sub = len(indices)
+                # Aggregate drive over each stride-wide chunk
+                padded_len = n_sub * stride
+                if padded_len > seq_len:
+                    pad = padded_len - seq_len
+                    g_pad = torch.nn.functional.pad(level_gates, (0, 0, 0, 0, 0, pad))
+                    d_pad = torch.nn.functional.pad(level_drive, (0, 0, 0, 0, 0, pad))
+                else:
+                    g_pad = level_gates
+                    d_pad = level_drive
+                g_chunks = g_pad.reshape(batch, n_sub, stride, n_heads, -1)
+                d_chunks = d_pad.reshape(batch, n_sub, stride, n_heads, -1)
+                # Use the last gate value and sum of drives per chunk
+                sub_gates = g_chunks[:, :, -1, :, :]  # [B, n_sub, H, dim]
+                sub_drive = d_chunks.sum(dim=2)         # [B, n_sub, H, dim]
+                # Scan at reduced resolution
+                sub_states = self._chunked_recurrence_scan(sub_gates, sub_drive)
+                # Broadcast back: each position in a chunk gets the chunk's state
+                expanded = sub_states.unsqueeze(2).expand_as(g_chunks)
+                states[..., start_dim:end_dim] = expanded.reshape(
+                    batch, padded_len, n_heads, -1
+                )[:, :seq_len, :, :]
+
+        return states
+
     def _complex_rotation_scan(
         self,
         gates: torch.Tensor,
@@ -771,49 +936,49 @@ class CausalBankModel(nn.Module):
         cos_omega: [batch, seq, heads, half_dim] — cos of rotation angle per pair
         sin_omega: [batch, seq, heads, half_dim] — sin of rotation angle per pair
         """
-        batch, seq_len, n_heads, head_dim = drive.shape
+        # Real-valued scan matching the fast path in _adaptive_substrate_states.
+        # Inductor can't fuse torch.complex + torch.roll + torch.where, so we
+        # carry paired (re, im) tensors and use F.pad with identity-element fill.
+        gates = gates.float()
+        drive = drive.float()
+        cos_omega = cos_omega.float()
+        sin_omega = sin_omega.float()
+        _, seq_len, _, head_dim = drive.shape
         half = head_dim // 2
-        device = drive.device
 
-        # Convert to complex: pair dims (2j, 2j+1) → complex z[j]
-        drive_even = drive[..., :half]
-        drive_odd = drive[..., half:]
-        z_drive = torch.complex(drive_even.float(), drive_odd.float())  # [B, T, H, half]
+        # Pair dims (even, odd) → complex z as (re, im)
+        b_re = drive[..., :half]
+        b_im = drive[..., half:]
 
-        # Decay is real, applied to both components equally
-        a_even = gates[..., :half].float()  # [B, T, H, half]
+        # Transition a = decay * exp(iω), so a_re = decay*cos, a_im = decay*sin
+        a_dec = gates[..., :half]
+        a_re = a_dec * cos_omega
+        a_im = a_dec * sin_omega
 
-        # Rotation as complex multiplier: exp(iω) = cos(ω) + i*sin(ω)
-        rot = torch.complex(cos_omega.float(), sin_omega.float())  # [B, T, H, half]
-
-        # Combined: a * exp(iω) per position
-        a_rot = a_even * rot  # [B, T, H, half]
-
-        # Parallel prefix scan for complex affine recurrence z_t = a_t * z_{t-1} + b_t
-        # Uses torch.roll + torch.where for dynamo-compatible fixed shapes.
-        ca = a_rot  # [B, T, H, half] complex
-        cb = z_drive  # [B, T, H, half] complex
-
-        pos_idx = torch.arange(seq_len, device=device)
-        n_levels = max(1, seq_len.bit_length() if isinstance(seq_len, int) else int(seq_len).bit_length())
-
+        # Prefix scan under (a2,b2)∘(a1,b1) = (a2·a1, a2·b1 + b2). Identity (1,0).
+        ca_re, ca_im = a_re, a_im
+        cb_re, cb_im = b_re, b_im
+        n_levels = max(1, int(seq_len).bit_length())
         for level in range(n_levels):
             d = 1 << level
             if d >= seq_len:
                 break
-            mask = (pos_idx >= d).view(1, -1, 1, 1)
+            # Shift with identity pad on the first d positions (seq dim = 1).
+            ca_re_prev = F.pad(ca_re[:, :-d], (0, 0, 0, 0, d, 0), value=1.0)
+            ca_im_prev = F.pad(ca_im[:, :-d], (0, 0, 0, 0, d, 0), value=0.0)
+            cb_re_prev = F.pad(cb_re[:, :-d], (0, 0, 0, 0, d, 0), value=0.0)
+            cb_im_prev = F.pad(cb_im[:, :-d], (0, 0, 0, 0, d, 0), value=0.0)
 
-            ca_prev = torch.roll(ca, d, dims=1)
-            cb_prev = torch.roll(cb, d, dims=1)
+            new_ca_re = ca_re * ca_re_prev - ca_im * ca_im_prev
+            new_ca_im = ca_re * ca_im_prev + ca_im * ca_re_prev
+            new_cb_re = ca_re * cb_re_prev - ca_im * cb_im_prev + cb_re
+            new_cb_im = ca_re * cb_im_prev + ca_im * cb_re_prev + cb_im
 
-            new_ca = ca * ca_prev
-            new_cb = ca * cb_prev + cb
+            ca_re, ca_im = new_ca_re, new_ca_im
+            cb_re, cb_im = new_cb_re, new_cb_im
 
-            ca = torch.where(mask, new_ca, ca)
-            cb = torch.where(mask, new_cb, cb)
-
-        # h_0 = 0, so state = cumulative_b
-        states = torch.cat([cb.real, cb.imag], dim=-1).to(drive.dtype)
+        # h_0 = 0, so state = cumulative b
+        states = torch.cat([cb_re, cb_im], dim=-1).to(drive.dtype)
         return states
 
     def _lasso_rotation_scan(
@@ -834,6 +999,9 @@ class CausalBankModel(nn.Module):
         drive: [batch, seq, heads, head_dim] — additive input
         m_matrix: [batch, seq, heads, half_dim, 4] — [m00, m01, m10, m11]
         """
+        # Force fp32 — cumulative matrix products over 1024+ positions
+        drive = drive.float()
+        m_matrix = m_matrix.float()
         batch, seq_len, n_heads, head_dim = drive.shape
         half = head_dim // 2
         device = drive.device
@@ -921,6 +1089,9 @@ class CausalBankModel(nn.Module):
         drive: [B, T, H, 4] — additive input
         q_rot: [B, T, H, 4] — unit quaternion rotation per position
         """
+        gates = gates.float()
+        drive = drive.float()
+        q_rot = q_rot.float()
         batch, seq_len, n_heads, _ = drive.shape
         device = drive.device
 
@@ -955,7 +1126,11 @@ class CausalBankModel(nn.Module):
         # h_0 = 0, so state = cumulative d
         return d
 
-    def _adaptive_substrate_states(self, x_embed: torch.Tensor) -> torch.Tensor:
+    def _adaptive_substrate_states(
+        self,
+        x_embed: torch.Tensor,
+        initial_state: tuple[torch.Tensor, torch.Tensor] | None = None,
+    ):
         """Minimal recurrence: 5 complex projections, parallel scan.
 
         z_k(t) = a_k(x_t) * z_k(t-1) + b_k(x_t)
@@ -963,51 +1138,120 @@ class CausalBankModel(nn.Module):
         b_k = write_k(x) * (proj_real(x) + i * proj_imag(x))
 
         No heads, no bands, no blocks, no local path.
-        Returns features for the readout: [real(z), imag(z), x_embed].
+
+        If `initial_state` is provided (pair of (re, im) [B, modes] tensors),
+        the scan starts from that state rather than zero. Returns a tuple
+        (features, final_state) where final_state is the (re, im) state after
+        the last position — to be detached and fed into the next call.
+        If `initial_state` is None, returns just `features` (legacy API).
         """
         batch, seq_len, _ = x_embed.shape
         device = x_embed.device
         dtype = x_embed.dtype
 
-        # 5 projections
-        decay = torch.sigmoid(self._adaptive_decay_proj(x_embed))     # [B, T, modes]
-        omega = self._adaptive_omega_proj(x_embed)                     # [B, T, modes] unbounded
-        write = torch.sigmoid(self._adaptive_write_proj(x_embed))     # [B, T, modes]
-        proj_r = self._adaptive_proj_real(x_embed)                     # [B, T, modes]
-        proj_i = self._adaptive_proj_imag(x_embed)                     # [B, T, modes]
+        # 5 projections (shared trunk or independent)
+        if getattr(self, "_adaptive_shared_proj", False):
+            trunk = self._adaptive_trunk(x_embed)                         # [B, T, modes] — one big matmul
+            decay = torch.sigmoid(self._adaptive_head_decay(trunk))       # [B, T, modes]
+            omega = self._adaptive_head_omega(trunk)                       # [B, T, modes]
+            write = torch.sigmoid(self._adaptive_head_write(trunk))       # [B, T, modes]
+            proj_r = self._adaptive_head_real(trunk)                       # [B, T, modes]
+            proj_i = self._adaptive_head_imag(trunk)                       # [B, T, modes]
+        else:
+            decay = torch.sigmoid(self._adaptive_decay_proj(x_embed))     # [B, T, modes]
+            omega = self._adaptive_omega_proj(x_embed)                     # [B, T, modes] unbounded
+            write = torch.sigmoid(self._adaptive_write_proj(x_embed))     # [B, T, modes]
+            proj_r = self._adaptive_proj_real(x_embed)                     # [B, T, modes]
+            proj_i = self._adaptive_proj_imag(x_embed)                     # [B, T, modes]
 
-        # Complex transition: a = decay * exp(i*omega)
-        a_real = decay * torch.cos(omega)
-        a_imag = decay * torch.sin(omega)
-        a = torch.complex(a_real.float(), a_imag.float())  # [B, T, modes]
+        # Complex scan runs in fp32 — cumulative products lose precision in fp16.
+        # Projections above stay in autocast dtype (fp16) for tensor core speedup.
+        #
+        # Performance: we keep everything as paired REAL tensors rather than
+        # torch.complex. TorchInductor cannot fuse complex multiplies; it falls
+        # back to eager which synchronizes between each of the ~10 scan levels
+        # and materializes intermediates. Writing the complex multiply as 4
+        # real mults + 2 adds on separate (re, im) tensors lets Inductor fuse
+        # the entire scan level into one kernel. Also: pad-with-identity
+        # instead of roll+where, so every scan level is O(n) fused work rather
+        # than two full-tensor copies + a broadcast mask materialization.
+        with torch.amp.autocast("cuda", enabled=False):
+            decay_f = decay.float()
+            omega_f = omega.float()
+            # Complex transition a = decay * exp(i*omega), stored as (re, im).
+            a_re = decay_f * torch.cos(omega_f)
+            a_im = decay_f * torch.sin(omega_f)
+            # Complex drive b = write * (proj_r + i*proj_i), stored as (re, im).
+            b_re = (write * proj_r).float()
+            b_im = (write * proj_i).float()
 
-        # Complex drive: b = write * (proj_r + i*proj_i)
-        b_real = write * proj_r
-        b_imag = write * proj_i
-        b = torch.complex(b_real.float(), b_imag.float())  # [B, T, modes]
+            # Parallel prefix scan: (a_t, b_t) composed under
+            # (a2, b2) ∘ (a1, b1) = (a2·a1, a2·b1 + b2). Identity is (1, 0).
+            #
+            # Two implementations:
+            # - Fused Triton kernel (opt-in via config.use_triton_scan): all
+            #   log(T) scan levels in one kernel launch via tl.associative_scan.
+            #   Measured ~21× over the F.pad version at B=8 T=1024 M=768.
+            # - F.pad-based (default): Inductor-fusable per scan level, works
+            #   everywhere, ~10× Python kernel launches per step.
+            _use_triton = getattr(self.config, "use_triton_scan", False) and a_re.is_cuda
+            if _use_triton:
+                try:
+                    from decepticons._triton_scan import triton_complex_affine_scan
+                    ca_re, ca_im, cb_re, cb_im = triton_complex_affine_scan(
+                        a_re.contiguous(), a_im.contiguous(),
+                        b_re.contiguous(), b_im.contiguous(),
+                    )
+                except Exception:
+                    # Fall through to F.pad scan on any triton error.
+                    _use_triton = False
+            if not _use_triton:
+                ca_re, ca_im = a_re, a_im
+                cb_re, cb_im = b_re, b_im
+                n_levels = max(1, int(seq_len).bit_length())
+                for level in range(n_levels):
+                    d = 1 << level
+                    if d >= seq_len:
+                        break
+                    # Shift forward by d; at positions [:d] use the identity
+                    # element so the mult/add leaves those entries unchanged.
+                    # Identity for a (complex mult) is (1, 0); for b (add) is (0, 0).
+                    ca_re_prev = F.pad(ca_re[:, :-d], (0, 0, d, 0), value=1.0)
+                    ca_im_prev = F.pad(ca_im[:, :-d], (0, 0, d, 0), value=0.0)
+                    cb_re_prev = F.pad(cb_re[:, :-d], (0, 0, d, 0), value=0.0)
+                    cb_im_prev = F.pad(cb_im[:, :-d], (0, 0, d, 0), value=0.0)
+                    new_ca_re = ca_re * ca_re_prev - ca_im * ca_im_prev
+                    new_ca_im = ca_re * ca_im_prev + ca_im * ca_re_prev
+                    new_cb_re = ca_re * cb_re_prev - ca_im * cb_im_prev + cb_re
+                    new_cb_im = ca_re * cb_im_prev + ca_im * cb_re_prev + cb_im
+                    ca_re, ca_im = new_ca_re, new_ca_im
+                    cb_re, cb_im = new_cb_re, new_cb_im
 
-        # Parallel prefix scan: z_t = a_t * z_{t-1} + b_t
-        ca = a
-        cb = b
-        pos_idx = torch.arange(seq_len, device=device)
-        n_levels = max(1, int(seq_len).bit_length())
-        for level in range(n_levels):
-            d = 1 << level
-            if d >= seq_len:
-                break
-            mask = (pos_idx >= d).view(1, -1, 1)
-            ca_prev = torch.roll(ca, d, dims=1)
-            cb_prev = torch.roll(cb, d, dims=1)
-            new_ca = ca * ca_prev
-            new_cb = ca * cb_prev + cb
-            ca = torch.where(mask, new_ca, ca)
-            cb = torch.where(mask, new_cb, cb)
+            # At this point:
+            #   ca_t = product of a's from step 0..t   [cumulative transition]
+            #   cb_t = zero-state prefix sum           [state assuming h_{-1} = 0]
+            # If initial_state s is given, the correct carried state is:
+            #   h_t = ca_t * s + cb_t  (one extra complex fma per position)
+            if initial_state is not None:
+                s_re, s_im = initial_state
+                # Broadcast s over the sequence dim: [B, 1, modes]
+                s_re_b = s_re.float().unsqueeze(1)
+                s_im_b = s_im.float().unsqueeze(1)
+                # ca * s complex multiply
+                cas_re = ca_re * s_re_b - ca_im * s_im_b
+                cas_im = ca_re * s_im_b + ca_im * s_re_b
+                z_re = cas_re + cb_re
+                z_im = cas_im + cb_im
+            else:
+                # State = cumulative b (h_0 = 0).
+                z_re, z_im = cb_re, cb_im
 
-        # State = cumulative b (h_0 = 0)
-        z = cb  # [B, T, modes] complex
+            # Export final state at the last position for the next call to
+            # consume. Shape [B, modes].
+            final_state = (z_re[:, -1, :], z_im[:, -1, :])
 
         # Output: concat real, imag, embedding → project to readout dim
-        features = torch.cat([z.real.to(dtype), z.imag.to(dtype), x_embed], dim=-1)
+        features = torch.cat([z_re.to(dtype), z_im.to(dtype), x_embed], dim=-1)
         out = self._adaptive_out_proj(features)
 
         # Store for forensics
@@ -1015,6 +1259,8 @@ class CausalBankModel(nn.Module):
         self._last_adaptive_omega = omega.detach()
         self._last_adaptive_write = write.detach()
 
+        if initial_state is not None:
+            return out, final_state
         return out
 
     def _block_matrix_scan(
@@ -1034,6 +1280,8 @@ class CausalBankModel(nn.Module):
         drive: [B, T, H, block_size]
         m_matrix: [B, T, H, block_size, block_size]
         """
+        drive = drive.float()
+        m_matrix = m_matrix.float()
         batch, seq_len, n_heads, bs = drive.shape
         device = drive.device
 
@@ -1242,6 +1490,8 @@ class CausalBankModel(nn.Module):
             sin_omega = torch.sin(omega)
             states = self._complex_rotation_scan(keep, drive, cos_omega, sin_omega)
             self._last_gated_delta_omega = omega.mean(dim=2).detach()
+        elif self._state_impl == "hierarchical":
+            states = self._hierarchical_scan(keep, drive)
         else:
             states = self._chunked_recurrence_scan(keep, drive)
 
@@ -1597,6 +1847,39 @@ class CausalBankModel(nn.Module):
         if self._patch_size > 1:
             return self._forward_patched(chars)
         return self._forward_raw(chars)
+
+    def forward_with_state(
+        self,
+        chars: torch.Tensor,
+        initial_state: tuple[torch.Tensor, torch.Tensor] | None = None,
+    ):
+        """Adaptive-substrate-only forward that threads substrate state across calls.
+
+        Returns (logits, final_state). `final_state` is a (re, im) tuple that
+        should be detached before being passed as `initial_state` to the next
+        call — this is truncated BPTT: state values carry forward, gradients
+        do not.
+
+        Only supports the adaptive-substrate path (HRR, complex EMA). For other
+        substrate modes, use forward() — state-carry isn't plumbed there yet.
+        """
+        if not getattr(self, "_use_adaptive_substrate", False):
+            raise RuntimeError(
+                "forward_with_state requires adaptive_substrate; "
+                "other substrate modes aren't yet state-carry enabled."
+            )
+        x_embed = self._embed_linear(chars)
+        features, final_state = self._adaptive_substrate_states(
+            x_embed,
+            initial_state=initial_state if initial_state is not None else (
+                torch.zeros(x_embed.shape[0], self.config.linear_modes,
+                            device=x_embed.device, dtype=torch.float32),
+                torch.zeros(x_embed.shape[0], self.config.linear_modes,
+                            device=x_embed.device, dtype=torch.float32),
+            ),
+        )
+        logits = self.linear_readout(features)
+        return logits, final_state
 
     def _forward_trust_routing(self, chars: torch.Tensor) -> torch.Tensor:
         """Trust-routing: table predicts, neural calibrates."""

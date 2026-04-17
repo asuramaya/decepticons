@@ -76,6 +76,37 @@ class CausalBankInference:
 
         with torch.inference_mode():
             # Substrate path
+            if getattr(self._model, '_use_adaptive_substrate', False):
+                x_embed = self._model._embed_linear(x)
+                features = self._model._adaptive_substrate_states(x_embed)
+                # The complex state z is stored during _adaptive_substrate_states
+                # features = _adaptive_out_proj([z.real, z.imag, x_embed])
+                result["embedding"] = x_embed.cpu().numpy()
+                # Retrieve complex state components from the parallel scan output
+                n_modes = self._model.config.linear_modes
+                z_real = features[:, :, :n_modes] if features.shape[-1] > n_modes else features
+                # Actually, features is post-projection. Get raw state from stored attrs.
+                decay = getattr(self._model, '_last_adaptive_decay', None)
+                omega = getattr(self._model, '_last_adaptive_omega', None)
+                write = getattr(self._model, '_last_adaptive_write', None)
+                result["adaptive_decay"] = decay.cpu().numpy() if decay is not None else None
+                result["adaptive_omega"] = omega.cpu().numpy() if omega is not None else None
+                result["adaptive_write"] = write.cpu().numpy() if write is not None else None
+                # Use features as substrate_states for analysis compatibility
+                result["substrate_states"] = features.cpu().numpy()
+                # Get logits
+                logits = self._model.linear_readout(features)
+                result["logits"] = logits.cpu().numpy()
+                # Fill remaining keys with None for compatibility
+                for k in ["route_weights", "band_logits", "local_logits",
+                           "sticky_write_strength", "temporal_attn_weights",
+                           "temporal_attn_output", "temporal_snapshot_interval",
+                           "gated_delta_write", "gated_delta_retain", "gated_delta_erase",
+                           "lasso_matrix", "overwrite_gate_values", "mode_selector_mask",
+                           "magnitude_before_norm"]:
+                    result[k] = None
+                return result
+
             states, x_embed = self._model._linear_states(x)
             result["substrate_states"] = states.cpu().numpy()
             result["embedding"] = x_embed.cpu().numpy()
@@ -342,6 +373,12 @@ def load_checkpoint(
             from dataclasses import replace as dc_replace
             config = dc_replace(config, linear_modes=true_modes)
 
+    # Infer true vocab_size from embedding shape
+    if "linear_embedding.weight" in state_dict:
+        true_vocab = state_dict["linear_embedding.weight"].shape[0]
+        if true_vocab != vocab_size:
+            vocab_size = true_vocab
+
     # Infer substrate transforms from state dict
     _transform_flags = {
         "_magnitude_normalizer.": "magnitude_normalize",
@@ -352,6 +389,8 @@ def load_checkpoint(
         "_lasso_proj.": "lasso_rotation",
         "_so5_proj.": "so5_rotation",
         "_quat_proj.": "quaternion_rotation",
+        "_adaptive_decay_proj.": "adaptive_substrate",
+        "_adaptive_trunk.": "adaptive_substrate",
     }
     # Position signal: detect from gate weight shape (embed_dim + 1)
     _position_signal_detected = False
@@ -367,9 +406,28 @@ def load_checkpoint(
             transform_updates[flag] = True
     if _position_signal_detected:
         transform_updates["position_signal"] = True
+    # Detect adaptive_shared_proj from trunk key
+    if "_adaptive_trunk.weight" in state_dict and not getattr(config, "adaptive_shared_proj", False):
+        transform_updates["adaptive_shared_proj"] = True
     if transform_updates:
         from dataclasses import replace as dc_replace
         config = dc_replace(config, **transform_updates)
+
+    # Infer patch_size from state dict
+    patch_head_indices = set()
+    for k in state_dict:
+        if k.startswith("_patch_byte_heads."):
+            idx = k.split(".")[1]
+            patch_head_indices.add(int(idx))
+    if patch_head_indices:
+        inferred_patch = max(patch_head_indices) + 1
+        from dataclasses import replace as dc_replace
+        updates = {"patch_size": inferred_patch}
+        if "_patch_byte_heads.0.weight" in state_dict:
+            updates["patch_causal_decoder"] = "mlp_factored"
+        elif "_patch_byte_decoder.weight_ih_l0" in state_dict:
+            updates["patch_causal_decoder"] = "autoregressive"
+        config = dc_replace(config, **updates)
 
     # Infer num_blocks from state dict
     block_indices = set()

@@ -23,7 +23,7 @@ CAUSAL_BANK_OSCILLATORY_SCHEDULES = (
 )
 CAUSAL_BANK_READOUT_KINDS = ("mlp", "tied_recursive", "routed_sqrelu_experts", "tied_embed_readout", "recurrent")
 CAUSAL_BANK_INPUT_PROJ_SCHEMES = ("random", "orthogonal_rows", "split_banks", "kernel_energy")
-CAUSAL_BANK_STATE_IMPLS = ("scan", "retention")
+CAUSAL_BANK_STATE_IMPLS = ("scan", "hierarchical", "retention")
 
 
 def _logspace_half_lives(start: float, end: float, count: int) -> np.ndarray:
@@ -69,7 +69,7 @@ class CausalBankConfig:
     num_blocks: int = 1
     block_mixing_ratio: float = 0.25  # bottleneck ratio for inter-block mixing
     state_dim: int = 0  # selective scan state dim (0 = use linear_modes, >0 = compressed state)
-    state_impl: str = "scan"  # "scan" = head-factored vector state, "retention" = multi-head matrix memory
+    state_impl: str = "scan"  # "scan" = chunked, "hierarchical" = tree by half-life, "retention" = matrix memory
     num_heads: int = 1  # multi-head state (each head runs independent scan)
     patch_size: int = 1  # byte-to-patch grouping (1 = raw bytes, >1 = patch encoding)
     num_hemispheres: int = 1  # 1=uniform, 2=fast/slow split
@@ -107,7 +107,11 @@ class CausalBankConfig:
     quintic_rotation: bool = False  # 5×5 block matrix transition (GL(5), non-solvable — UNSTABLE, use so5)
     so5_rotation: bool = False  # SO(5) via Lie algebra exp: skew-symmetric → matrix_exp → guaranteed rotation
     adaptive_substrate: bool = False  # minimal recurrence: 5 projections, complex-valued, no local/bands/heads
+    adaptive_shared_proj: bool = False  # shared trunk + 5 cheap heads instead of 5 independent projections
     hrr_omega_init: bool = False  # HRR binding: init omega bias as uniform Fourier basis [0, 2π)
+    hrr_rotation_angle_init: bool = False  # HRR on gated-delta rotation: Fourier-init per-pair angle bias
+    adaptive_head_rank: int = 0  # Low-rank factorization of adaptive_shared_proj heads; 0 = full rank
+    use_triton_scan: bool = False  # Use fused Triton Hillis-Steele scan for adaptive substrate (21× over F.pad)
     freeze_omega: bool = False  # freeze omega projection — fixed Fourier dynamics, order from physics not optimization
     position_signal: bool = False  # feed log(1+t) into gate/lasso projections (breaks shift invariance)
 
@@ -193,8 +197,8 @@ def validate_config(config: CausalBankConfig) -> None:
             raise ValueError("causal-bank gated_delta requires enable_linear=True.")
         if config.state_dim <= 0:
             raise ValueError("causal-bank gated_delta requires state_dim > 0.")
-        if config.state_impl != "scan":
-            raise ValueError("causal-bank gated_delta requires state_impl='scan'.")
+        if config.state_impl not in ("scan", "hierarchical"):
+            raise ValueError("causal-bank gated_delta requires state_impl='scan' or 'hierarchical'.")
     if config.num_heads < 1:
         raise ValueError("causal-bank num_heads must be >= 1.")
     if config.state_dim > 0 and config.state_dim % config.num_heads != 0:
@@ -562,15 +566,30 @@ def build_linear_bank(config: CausalBankConfig) -> tuple[np.ndarray, np.ndarray,
     else:
         raise ValueError(f"Unknown causal-bank input_proj_scheme: {config.input_proj_scheme}")
 
-    kernels: list[np.ndarray] = []
+    # The full [modes, max_seq_len, max_seq_len] kernel is O(n² × modes) in memory.
+    # At scale=8 / seq_len=4096 that's 2048 × 4096² × 4B = 137 GiB — enough to OOM
+    # a 64 GB host. We only actually NEED the materialized kernel for two paths:
+    #   (a) config.linear_impl == "kernel"         — used as a registered buffer
+    #   (b) config.input_proj_scheme == "kernel_energy" — used for mode-energy
+    #       normalization of in_proj, which reads kernel² via reduction.
+    # The scan and FFT substrate paths reconstruct what they need on-demand from
+    # `decays_full` in forward(), so skipping kernel materialization for them
+    # costs nothing and unblocks long-context byte experiments.
+    need_kernel = (
+        getattr(config, "linear_impl", "kernel") == "kernel"
+        or config.input_proj_scheme == "kernel_energy"
+    )
+
     decay_parts: list[np.ndarray] = []
+    kernels: list[np.ndarray] = [] if need_kernel else []  # unused when skipping
 
     if non_osc_modes > 0:
         half_lives = _logspace_half_lives(
             config.linear_half_life_min, config.linear_half_life_max, non_osc_modes
         )
         decays = _decays_from_half_lives(half_lives)
-        kernels.append(_kernel_from_decays(decays, config.max_seq_len))
+        if need_kernel:
+            kernels.append(_kernel_from_decays(decays, config.max_seq_len))
         decay_parts.append(decays)
 
     if osc_pairs > 0:
@@ -584,20 +603,25 @@ def build_linear_bank(config: CausalBankConfig) -> tuple[np.ndarray, np.ndarray,
                     base = _orthogonal_rows_in_proj(rng, config.embedding_dim, 1).reshape(-1)
                 in_proj[:, start] = base
                 in_proj[:, start + 1] = base
-        kernels.append(_kernel_from_damped_oscillators(decays, periods, config.max_seq_len))
+        if need_kernel:
+            kernels.append(_kernel_from_damped_oscillators(decays, periods, config.max_seq_len))
         decay_parts.append(np.repeat(decays, 2))
 
-    if not kernels:
+    if non_osc_modes <= 0 and osc_pairs <= 0:
         raise ValueError("causal-bank linear bank must contain at least one mode.")
 
-    kernel = np.concatenate(kernels, axis=0).astype(np.float32, copy=False)
     decays_full = np.concatenate(decay_parts, axis=0).astype(np.float32, copy=False)
-    if config.input_proj_scheme == "kernel_energy":
-        mode_energy = np.sqrt(np.mean(kernel * kernel, axis=(1, 2), dtype=np.float32)).astype(
-            np.float32, copy=False
-        )
-        mode_energy = mode_energy / max(float(np.mean(mode_energy)), 1e-6)
-        in_proj = in_proj * mode_energy[None, :]
+    if need_kernel:
+        kernel = np.concatenate(kernels, axis=0).astype(np.float32, copy=False)
+        if config.input_proj_scheme == "kernel_energy":
+            mode_energy = np.sqrt(np.mean(kernel * kernel, axis=(1, 2), dtype=np.float32)).astype(
+                np.float32, copy=False
+            )
+            mode_energy = mode_energy / max(float(np.mean(mode_energy)), 1e-6)
+            in_proj = in_proj * mode_energy[None, :]
+    else:
+        # Empty sentinel; callers that don't use linear_impl=="kernel" ignore it.
+        kernel = np.zeros((0, 0, 0), dtype=np.float32)
     return in_proj.astype(np.float32, copy=False), decays_full, kernel
 
 
