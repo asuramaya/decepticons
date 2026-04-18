@@ -77,28 +77,43 @@ class CausalBankInference:
         with torch.inference_mode():
             # Substrate path
             if getattr(self._model, '_use_adaptive_substrate', False):
-                x_embed = self._model._embed_linear(x)
-                features = self._model._adaptive_substrate_states(x_embed)
-                # The complex state z is stored during _adaptive_substrate_states
-                # features = _adaptive_out_proj([z.real, z.imag, x_embed])
-                result["embedding"] = x_embed.cpu().numpy()
-                # Retrieve complex state components from the parallel scan output
-                n_modes = self._model.config.linear_modes
-                z_real = features[:, :, :n_modes] if features.shape[-1] > n_modes else features
-                # Actually, features is post-projection. Get raw state from stored attrs.
-                decay = getattr(self._model, '_last_adaptive_decay', None)
-                omega = getattr(self._model, '_last_adaptive_omega', None)
-                write = getattr(self._model, '_last_adaptive_write', None)
-                result["adaptive_decay"] = decay.cpu().numpy() if decay is not None else None
-                result["adaptive_omega"] = omega.cpu().numpy() if omega is not None else None
-                result["adaptive_write"] = write.cpu().numpy() if write is not None else None
-                # Use features as substrate_states for analysis compatibility
-                result["substrate_states"] = features.cpu().numpy()
-                # Get logits
-                logits = self._model.linear_readout(features)
+                # Single source of truth: run the real training forward.
+                # `_linear_logits` stashes `_last_x_embed` and `_last_features`
+                # on the model in eval mode; we read them off here. Any plugin
+                # (hash_memory, local_path, future additions) lands inside
+                # `_forward_raw`/`_linear_logits` and propagates here for free.
+                logits = self._model(x)
+                # Fat-readout patching: training returns [B, T, patch_n, V]
+                # already reshaped. Collapse to [B, T, V] at p=0 so downstream
+                # 2D-logit code (MRI loss, etc.) keeps working.
+                if logits.ndim == 4:
+                    logits = logits[:, :, 0, :]
                 result["logits"] = logits.cpu().numpy()
+
+                # Read stashed intermediates from the forward.
+                result["embedding"] = self._model._last_x_embed.cpu().numpy()
+                result["substrate_states"] = self._model._last_features.cpu().numpy()
+
+                # Adaptive scan internals (already stashed by _adaptive_substrate_states)
+                for src, dst in [("_last_adaptive_decay", "adaptive_decay"),
+                                 ("_last_adaptive_omega", "adaptive_omega"),
+                                 ("_last_adaptive_write", "adaptive_write")]:
+                    t = getattr(self._model, src, None)
+                    result[dst] = t.cpu().numpy() if t is not None else None
+
+                # Router probs: recompute from stashed features. `readout.router`
+                # is deterministic Linear, so this is bit-identical to what the
+                # readout used internally. Cheap (one matmul + softmax).
+                readout = self._model.linear_readout
+                if hasattr(readout, "router"):
+                    router_logits = readout.router(self._model._last_features)
+                    result["route_weights"] = torch.softmax(
+                        router_logits, dim=-1).cpu().numpy()
+                else:
+                    result["route_weights"] = None
+
                 # Fill remaining keys with None for compatibility
-                for k in ["route_weights", "band_logits", "local_logits",
+                for k in ["band_logits", "local_logits",
                            "sticky_write_strength", "temporal_attn_weights",
                            "temporal_attn_output", "temporal_snapshot_interval",
                            "gated_delta_write", "gated_delta_retain", "gated_delta_erase",
@@ -391,6 +406,7 @@ def load_checkpoint(
         "_quat_proj.": "quaternion_rotation",
         "_adaptive_decay_proj.": "adaptive_substrate",
         "_adaptive_trunk.": "adaptive_substrate",
+        "_hash_memory.": "hash_memory",
     }
     # Position signal: detect from gate weight shape (embed_dim + 1)
     _position_signal_detected = False
@@ -409,11 +425,17 @@ def load_checkpoint(
     # Detect adaptive_shared_proj from trunk key
     if "_adaptive_trunk.weight" in state_dict and not getattr(config, "adaptive_shared_proj", False):
         transform_updates["adaptive_shared_proj"] = True
+    # Infer hash_memory dimensions from state dict
+    if "_hash_memory.write_proj.weight" in state_dict:
+        # write_proj: [memory_dim, embedding_dim]
+        memory_dim = int(state_dict["_hash_memory.write_proj.weight"].shape[0])
+        transform_updates["hash_memory_dim"] = memory_dim
     if transform_updates:
         from dataclasses import replace as dc_replace
         config = dc_replace(config, **transform_updates)
 
     # Infer patch_size from state dict
+    _fat_readout_patching = False
     patch_head_indices = set()
     for k in state_dict:
         if k.startswith("_patch_byte_heads."):
@@ -428,6 +450,30 @@ def load_checkpoint(
         elif "_patch_byte_decoder.weight_ih_l0" in state_dict:
             updates["patch_causal_decoder"] = "autoregressive"
         config = dc_replace(config, **updates)
+    else:
+        # Fat-readout patching: readout outputs patch_n * vocab instead of vocab,
+        # and the model reshapes via `_reshape_patch_logits` (no separate patch
+        # decoder modules). Detect from linear_readout output dim.
+        out_w_key = "linear_readout.out.weight"
+        if out_w_key in state_dict:
+            out_dim = state_dict[out_w_key].shape[0]
+            if out_dim % vocab_size == 0 and out_dim // vocab_size > 1:
+                inferred_patch = out_dim // vocab_size
+                from dataclasses import replace as dc_replace
+                # `patch_causal_decoder="none"` signals "no patch_byte_heads /
+                # _patch_decoder modules, patching lives in linear_readout."
+                # The constructor still builds `_patch_encoder` + `_patch_decoder`
+                # for the non-adaptive forward path; we'll load strict=False so
+                # the adaptive-substrate forward (which bypasses both) works.
+                # `patch_n` controls the fat-readout output multiplier:
+                # readout emits [patch_n * vocab] flat, then `_reshape_patch_logits`
+                # reshapes it to [B, T, patch_n, vocab]. Keep `patch_size=1` so
+                # forward() dispatches to `_forward_raw` (which handles adaptive
+                # substrate correctly) instead of `_forward_patched` which
+                # expects `_patch_encoder`/`_patch_decoder` modules this
+                # checkpoint doesn't carry.
+                config = dc_replace(config, patch_n=inferred_patch)
+                _fat_readout_patching = True
 
     # Infer num_blocks from state dict
     block_indices = set()
@@ -466,9 +512,9 @@ def load_checkpoint(
 
     model = CausalBankModel(vocab_size=vocab_size, config=config).to(device)
 
-    if _original_readout_kind:
-        # The main linear_readout was built with the band kind; rebuild it with the original
-        # This handles the case where bands use MLP but linear_readout uses routed experts
+    if _original_readout_kind or _fat_readout_patching:
+        # Either bands/readout kind was overridden, or patching is encoded in
+        # linear_readout without separate patch modules — allow missing keys.
         model.load_state_dict(state_dict, strict=False)
     else:
         model.load_state_dict(state_dict)

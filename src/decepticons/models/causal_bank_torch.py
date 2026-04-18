@@ -1778,6 +1778,12 @@ class CausalBankModel(nn.Module):
             if getattr(self, '_use_hash_memory', False):
                 x_embed = x_embed + self._hash_memory(x_embed)
             features = self._adaptive_substrate_states(x_embed)
+            # Stash intermediates for forward_captured. Gated on eval mode so
+            # training never pays for the activation retention. `.detach()`
+            # means no autograd provenance, which is fine for inference.
+            if not self.training:
+                self._last_x_embed = x_embed.detach()
+                self._last_features = features.detach()
             return self._reshape_patch_logits(self.linear_readout(features))
 
         states, x = self._linear_states(chars, mode_gate=mode_gate)
