@@ -122,6 +122,20 @@ class CausalBankInference:
                     result[k] = None
                 return result
 
+            # NOTE (P2, deferred from session 11): this branch is still a
+            # manual reimplementation of the non-adaptive forward. Same drift
+            # class that bit the adaptive branch (f52865e collapsed that to
+            # model(x) + stashes). To apply the same collapse here we need to:
+            #   1. Stash _last_states_nonadaptive in _linear_states (eval mode)
+            #   2. Stash _last_logits_raw and _last_logits_local in _forward_raw
+            #   3. Rewrite this branch to call self._model(x) and read stashes
+            #   4. Extend the bit-identical pytest fixture to cover non-adaptive
+            # Deferred because: 5+ substrate variants (lasso, gated_delta,
+            # SO(3)/SO(5), quaternion, standard) each have their own
+            # intermediate-stashing patterns, and a wrong refactor would
+            # silently corrupt analysis for all of them. Chronohorn has not
+            # added new plug-ins to the non-adaptive path recently; the drift
+            # risk is future, not present. See session-11 P2 discussion.
             states, x_embed = self._model._linear_states(x)
             result["substrate_states"] = states.cpu().numpy()
             result["embedding"] = x_embed.cpu().numpy()
