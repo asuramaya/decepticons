@@ -1768,10 +1768,15 @@ class CausalBankModel(nn.Module):
         return out.reshape(b, t, n, flat // n)
 
     def _linear_logits(self, chars: torch.Tensor, mode_gate: torch.Tensor | None = None) -> torch.Tensor:
-        # Adaptive substrate: bypass all transforms, bands, local path.
-        # The recurrence IS the model. The readout reads the result directly.
+        # Adaptive substrate: the recurrence IS the model. Bypass bands + local
+        # path (those are non-adaptive-only concepts). Hash-memory MUST be
+        # plumbed here explicitly — the non-adaptive branch adds it at line 1794
+        # and the adaptive branch silently bypassed it for sessions 10+11 until
+        # Heinrich proved the module received zero gradient for 15k steps.
         if getattr(self, '_use_adaptive_substrate', False):
             x_embed = self._embed_linear(chars)
+            if getattr(self, '_use_hash_memory', False):
+                x_embed = x_embed + self._hash_memory(x_embed)
             features = self._adaptive_substrate_states(x_embed)
             return self._reshape_patch_logits(self.linear_readout(features))
 
@@ -2026,9 +2031,23 @@ class CausalBankModel(nn.Module):
         return logits_linear + gate * logits_local
 
     def _forward_raw(self, chars: torch.Tensor) -> torch.Tensor:
-        # Adaptive substrate: the recurrence IS the entire model. No local path.
+        # Adaptive substrate: the recurrence IS the main model, but local path
+        # (8-byte conv) and local_scale > 0 used to be silently dropped here.
+        # Heinrich's session-11 mut-localon ran 20k steps with local_scale=0.25
+        # and bit-identical weights to the no-local control — the local readout
+        # received zero gradient. Now plumbed: additive mixing, same shape as
+        # non-adaptive branch, respects enable_local + local_scale.
         if getattr(self, '_use_adaptive_substrate', False):
-            return self._linear_logits(chars).clone()
+            logits_linear = self._linear_logits(chars)
+            if (self.config.enable_local and self.local_readout is not None
+                    and self.config.local_scale > 0):
+                logits_local = self._local_logits(chars)
+                # Match shape: adaptive path may produce [B, T, N, V] under
+                # patch-at-readout; local is always [B, T, V]. Broadcast over N.
+                if logits_linear.dim() == 4 and logits_local.dim() == 3:
+                    logits_local = logits_local.unsqueeze(2)
+                logits_linear = logits_linear + self.config.local_scale * logits_local
+            return logits_linear.clone()
 
         logits_linear = self._linear_logits(chars) if self.config.enable_linear else None
         logits_local = self._local_logits(chars) if self.config.enable_local else None
