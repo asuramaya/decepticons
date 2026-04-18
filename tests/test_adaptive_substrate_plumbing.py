@@ -100,6 +100,109 @@ def test_local_path_receives_gradient_on_adaptive_substrate():
     )
 
 
+def _max_abs_grad(params) -> float:
+    m = 0.0
+    for p in params:
+        if p.grad is not None and p.requires_grad:
+            g = float(p.grad.abs().max().item())
+            if g > m:
+                m = g
+    return m
+
+
+def test_all_submodules_receive_gradient():
+    """Generalized plug-in preflight: every submodule with requires_grad params
+    must receive a non-zero gradient on a single forward+backward.
+
+    This is the P13 fix — retires the hardcoded KNOWN_PLUGIN_PREFIXES list.
+    Any new plug-in added to the model is checked automatically without the
+    test needing to be updated.
+
+    Modules reported as dormant when every one of their parameters has zero
+    gradient. This catches:
+    - Plug-ins enabled but not invoked (session-11 hash_memory / localon bug)
+    - Dead code paths that instantiate weights but never use them
+    - Config flags that flip a module on without plumbing it
+    """
+    cfg = _adaptive_cfg(
+        hash_memory=True, hash_memory_slots=8, hash_memory_dim=8,
+        local_scale=0.25, enable_local=True,
+    )
+    model = CausalBankModel(64, cfg)
+    x = torch.randint(0, 64, (2, 16))
+    loss = model(x).sum()
+    loss.backward()
+
+    dormant = []
+    checked = 0
+    for mod_name, module in model.named_modules():
+        if not mod_name:  # skip the root
+            continue
+        params = [p for p in module.parameters(recurse=False) if p.requires_grad]
+        if not params:
+            continue
+        checked += 1
+        if _max_abs_grad(params) == 0.0:
+            dormant.append(mod_name)
+
+    assert not dormant, (
+        f"{len(dormant)}/{checked} submodules received zero gradient: "
+        f"{dormant[:8]}. These parameters are instantiated but unreachable "
+        "from the forward path — same bug class as session-11 hashmem/localon."
+    )
+
+
+def test_forward_captured_matches_training_forward():
+    """P14: forward_captured(x).logits must equal model(x) bit-identically.
+
+    The session-11 drift: heinrich's loader.forward_captured reimplemented the
+    adaptive-substrate forward inline and diverged from model(x) when
+    hash_memory / local_path plumbing landed in the training path (50b5f3d).
+    The path-collapse refactor (f52865e) made them structurally identical —
+    this test guards against regression if anyone reintroduces a parallel path.
+    """
+    try:
+        from decepticons.loader import CausalBankInference
+    except ImportError:
+        pytest.skip("decepticons.loader not importable")
+    import numpy as np
+
+    cfg = _adaptive_cfg(
+        hash_memory=True, hash_memory_slots=8, hash_memory_dim=8,
+        local_scale=0.25, enable_local=True,
+    )
+    model = CausalBankModel(64, cfg)
+    model.train(False)  # puts model in inference mode
+    # Construct a minimal stub. CausalBankInference is a frozen dataclass,
+    # so we use its constructor with dummy values for fields we don't use.
+    inf = CausalBankInference(
+        config={},
+        half_lives=np.zeros((cfg.linear_modes,), dtype=np.float32),
+        tokenizer=None,
+        _model=model,
+        _device="cpu",
+    )
+
+    x = torch.randint(0, 64, (2, 16))
+    x_np = x.numpy()
+
+    with torch.inference_mode():
+        logits_train = model(x)
+    if logits_train.ndim == 4:  # fat-readout patching
+        logits_train = logits_train[:, :, 0, :]
+
+    result = inf.forward_captured(x_np)
+    logits_cap = torch.from_numpy(result["logits"])
+
+    max_diff = float((logits_train - logits_cap).abs().max().item())
+    assert max_diff == 0.0, (
+        f"model(x) and forward_captured(x) diverged by max |Δ|={max_diff}. "
+        "The loader's forward path drifted from the model's. Check that "
+        "forward_captured calls model(x) rather than reimplementing the "
+        "substrate forward — see f52865e."
+    )
+
+
 def test_local_path_disabled_when_scale_zero():
     """local_scale=0 should NOT route gradient through the local readout.
 
