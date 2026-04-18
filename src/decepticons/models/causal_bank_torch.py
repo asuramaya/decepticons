@@ -2213,31 +2213,17 @@ class CausalBankModel(nn.Module):
         """Regularization for learnable substrate parameters.
 
         Returns a scalar loss term that should be added to the training loss.
-        For frozen substrate the only contribution is adaptive ortho-reg on the
-        omega projection weight (when ``ortho_reg_coeff > 0`` on the config).
-        For learned substrates the original adaptive_reg path also applies.
-        When ``adaptive_reg=True`` on the config the strength grows with
-        ``sqrt(step / 1000)``.
+        Returns 0 for frozen substrate. When ``adaptive_reg=True`` on the
+        config the strength grows with ``sqrt(step / 1000)``.
+
+        (Note: orthogonality reg on the adaptive omega_proj was tested in
+        session 11 at λ=0.1 and λ=1.0 with max bpb Δ=0.0002 across 4 clean
+        pairs. The model already lives at 7% mode utilization — orthogonality
+        constraints have nothing to tighten. Removed per Heinrich's verdict.)
         """
-        dev = next(self.parameters()).device
-
-        # Adaptive substrate orthogonality regularization on omega_proj.weight.
-        # Heinrich's MRI showed s12 modes regress to ~12% redundant pairs (cos > 0.5);
-        # this off-diagonal Gram penalty pushes mode projections toward linear
-        # independence so more capacity is "fresh" rather than redundant copies.
-        ortho_reg = torch.tensor(0.0, device=dev)
-        ortho_coeff = float(getattr(self.config, 'ortho_reg_coeff', 0.0))
-        if ortho_coeff > 0 and getattr(self, '_use_adaptive_substrate', False):
-            if hasattr(self, '_adaptive_omega_proj') and self._adaptive_omega_proj is not None:
-                W = self._adaptive_omega_proj.weight.float()  # [n_modes, embed_dim]
-                W_norm = W / (W.norm(dim=1, keepdim=True) + 1e-8)
-                gram = W_norm @ W_norm.T  # [n_modes, n_modes] — pairwise cosine
-                n = gram.shape[0]
-                off_diag_sq = gram.pow(2).sum() - gram.diagonal().pow(2).sum()
-                ortho_reg = ortho_reg + ortho_coeff * off_diag_sq / max(n * (n - 1), 1)
-
         if not getattr(self, '_recompute_kernel', False) and not getattr(self, '_learned_recurrence', False):
-            return ortho_reg
+            return torch.tensor(0.0, device=next(self.parameters()).device)
+        dev = next(self.parameters()).device
 
         # --- Adaptive scale ---
         adaptive = getattr(self.config, 'adaptive_reg', False)
@@ -2248,8 +2234,8 @@ class CausalBankModel(nn.Module):
             # applies to a small L2 penalty on gate weights if present.
             if self._learned_recurrence:
                 reg = self._gate_weight.pow(2).sum() * 1e-4
-                return reg * scale + ortho_reg
-            return ortho_reg
+                return reg * scale
+            return torch.tensor(0.0, device=dev)
 
         decays = self.linear_decays
         reg = torch.tensor(0.0, device=decays.device)
@@ -2271,7 +2257,7 @@ class CausalBankModel(nn.Module):
             diversity_loss = (similarity * mask).sum() / max(mask.sum(), 1.0)
             reg = reg + diversity_loss * 0.1
 
-        return reg * scale + ortho_reg
+        return reg * scale
 
     def band_balance_loss(self) -> torch.Tensor:
         """Sum balance_loss() from all band readouts that are RoutedSquaredReLUReadout.
