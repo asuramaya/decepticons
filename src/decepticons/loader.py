@@ -122,21 +122,31 @@ class CausalBankInference:
                     result[k] = None
                 return result
 
-            # NOTE (P2, deferred from session 11): this branch is still a
-            # manual reimplementation of the non-adaptive forward. Same drift
-            # class that bit the adaptive branch (f52865e collapsed that to
-            # model(x) + stashes). To apply the same collapse here we need to:
-            #   1. Stash _last_states_nonadaptive in _linear_states (eval mode)
-            #   2. Stash _last_logits_raw and _last_logits_local in _forward_raw
-            #   3. Rewrite this branch to call self._model(x) and read stashes
-            #   4. Extend the bit-identical pytest fixture to cover non-adaptive
-            # Deferred because: 5+ substrate variants (lasso, gated_delta,
-            # SO(3)/SO(5), quaternion, standard) each have their own
-            # intermediate-stashing patterns, and a wrong refactor would
-            # silently corrupt analysis for all of them. Chronohorn has not
-            # added new plug-ins to the non-adaptive path recently; the drift
-            # risk is future, not present. See session-11 P2 discussion.
-            states, x_embed = self._model._linear_states(x)
+            # Non-adaptive forward path (session-12 P2 collapse). Until session
+            # 11 this branch reimplemented the forward inline — every plugin
+            # added to `_linear_logits` / `_local_logits` had to be mirrored
+            # here by hand or it silently dropped out of MRI captures
+            # (the drift class that ate hours in session 11 with hash_memory).
+            # Now: run the real model forward once, then read the intermediates
+            # that `_linear_logits` / `_local_logits` / `_linear_states_recurrent`
+            # have stashed on the model under eval mode. Same pattern as the
+            # adaptive branch above. Per-variant stashes (lasso / gated-delta /
+            # SO(3)/SO(5) / quintic / quaternion / complex rotation) were
+            # already in place inside `_linear_states_recurrent`; only the
+            # linear / band / local composition needed collapsing.
+            logits = self._model(x)
+            if logits.dim() == 4:
+                logits = logits[:, :, 0, :]
+            result["logits"] = logits.cpu().numpy()
+
+            # Substrate state + embedding: prefer post-transform stashes
+            # (populated by _linear_logits in eval mode), fall back to a
+            # direct _linear_states call for configurations that bypass
+            # _linear_logits (e.g. trust_routing or ngram_table paths).
+            states = getattr(self._model, '_last_states_nonadaptive', None)
+            x_embed = getattr(self._model, '_last_x_embed_nonadaptive', None)
+            if states is None or x_embed is None:
+                states, x_embed = self._model._linear_states(x)
             result["substrate_states"] = states.cpu().numpy()
             result["embedding"] = x_embed.cpu().numpy()
 
@@ -199,47 +209,20 @@ class CausalBankInference:
             else:
                 result["sticky_write_strength"] = None
 
-            # Readout: capture per-band and routing
-            n_bands = getattr(self._model.config, "readout_bands", 1)
-            if n_bands > 1 and hasattr(self._model, "_band_readouts"):
-                modes = states.shape[-1]
-                band_size = modes // n_bands
-                band_logits_list = []
-                _static = getattr(self._model, "_static_band_indices", set())
-                for i, readout in enumerate(self._model._band_readouts):
-                    if i in _static:
-                        band_logits_list.append(readout(x_embed).cpu().numpy())
-                    else:
-                        band_states = states[..., i * band_size : (i + 1) * band_size]
-                        band_features = torch.cat([band_states, x_embed], dim=-1)
-                        band_logits_list.append(readout(band_features).cpu().numpy())
-                result["band_logits"] = band_logits_list
-                logits_linear = torch.from_numpy(sum(bl for bl in band_logits_list)).to(self._device)
-            else:
-                result["band_logits"] = None
-                logits_linear = self._model._linear_logits(x)
+            # Band logits: read stashed list populated by _linear_logits
+            # during the forward. None if the model is single-band.
+            band_list = getattr(self._model, "_last_band_logits_list", None)
+            result["band_logits"] = (
+                [bl.cpu().numpy() for bl in band_list] if band_list is not None else None
+            )
 
-            # Expert routing (captured during _linear_logits or manual forward)
+            # Expert routing (captured during _linear_logits)
             route = getattr(self._model.linear_readout, "_last_route", None)
             result["route_weights"] = route.cpu().numpy() if route is not None else None
 
-            # Local path
-            if self._model.config.enable_local:
-                logits_local = self._model._local_logits(x)
-                result["local_logits"] = logits_local.cpu().numpy()
-                if self._model.gate_proj is None:
-                    gate = self._model.config.local_scale
-                else:
-                    ent_l, max_l, var_l = self._model._logit_features(logits_linear)
-                    ent_r, max_r, var_r = self._model._logit_features(logits_local)
-                    features = torch.stack([ent_l, ent_r, max_l, max_r, var_l, var_r], dim=-1)
-                    gate = torch.sigmoid(self._model.gate_proj(features)) * self._model.config.local_scale
-                logits = logits_linear + gate * logits_local
-            else:
-                result["local_logits"] = None
-                logits = logits_linear
-
-            result["logits"] = logits.cpu().numpy()
+            # Local path logits (captured during _local_logits)
+            local = getattr(self._model, "_last_local_logits", None)
+            result["local_logits"] = local.cpu().numpy() if local is not None else None
 
         return result
 

@@ -44,6 +44,32 @@ def _adaptive_cfg(**overrides) -> CausalBankConfig:
     return CausalBankConfig(**base)
 
 
+def _nonadaptive_cfg(**overrides) -> CausalBankConfig:
+    """Minimal config exercising the non-adaptive substrate path. This is
+    the branch whose forward was reimplemented inline in the loader until the
+    session-12 P2 collapse; this config drives the regression fixture that
+    catches re-introduction of a parallel forward path there."""
+    base = dict(
+        embedding_dim=8,
+        linear_modes=16,
+        max_seq_len=32,
+        linear_half_life_max=8.0,
+        linear_hidden=(16,),
+        linear_readout_kind="mlp",
+        linear_readout_num_experts=2,
+        readout_bands=1,
+        local_window=4,
+        local_scale=0.25,   # exercise local-path composition
+        enable_local=True,
+        linear_impl="scan",
+        substrate_mode="frozen",
+        adaptive_substrate=False,   # the whole point of this config
+        num_heads=1,
+    )
+    base.update(overrides)
+    return CausalBankConfig(**base)
+
+
 def _max_abs_grad_for(model: torch.nn.Module, name_substr: str) -> float:
     """Max |grad| across parameters whose qualified name contains substr."""
     grads = []
@@ -201,6 +227,64 @@ def test_forward_captured_matches_training_forward():
         "forward_captured calls model(x) rather than reimplementing the "
         "substrate forward — see f52865e."
     )
+
+
+def test_forward_captured_matches_training_forward_nonadaptive():
+    """P2 (session 12): forward_captured(x).logits must equal model(x)
+    bit-identically on the NON-adaptive path too.
+
+    Until session 12 the loader reimplemented the non-adaptive forward
+    inline — calling _linear_states, then _linear_logits or manual band
+    readouts, then _local_logits, then recomposing logits by hand. Every
+    plugin landed in _linear_logits had to be mirrored here or silently
+    dropped out of MRI captures (same drift class as the adaptive branch
+    bypass fixed in f52865e).
+
+    The collapse replaces all of that with `model(x)` plus stash reads. This
+    fixture asserts the collapse is still bit-identical; regression here
+    means someone has reintroduced a parallel non-adaptive forward path.
+    """
+    try:
+        from decepticons.loader import CausalBankInference
+    except ImportError:
+        pytest.skip("decepticons.loader not importable")
+    import numpy as np
+
+    cfg = _nonadaptive_cfg()
+    model = CausalBankModel(64, cfg)
+    model.train(False)
+    inf = CausalBankInference(
+        config={},
+        half_lives=np.zeros((cfg.linear_modes,), dtype=np.float32),
+        tokenizer=None,
+        _model=model,
+        _device="cpu",
+    )
+
+    x = torch.randint(0, 64, (2, 16))
+    x_np = x.numpy()
+
+    with torch.inference_mode():
+        logits_train = model(x)
+    if logits_train.ndim == 4:
+        logits_train = logits_train[:, :, 0, :]
+
+    result = inf.forward_captured(x_np)
+    logits_cap = torch.from_numpy(result["logits"])
+
+    max_diff = float((logits_train - logits_cap).abs().max().item())
+    assert max_diff == 0.0, (
+        f"model(x) and forward_captured(x) diverged by max |Δ|={max_diff} "
+        "on the non-adaptive path. The loader's forward has drifted from "
+        "model(x) — check that the non-adaptive branch of forward_captured "
+        "still calls self._model(x) and reads stashes rather than "
+        "reimplementing the forward inline."
+    )
+
+    # Substrate and local_logits should also be populated from the stashes
+    # (rather than silently None), since this config enables both.
+    assert result["substrate_states"] is not None
+    assert result["local_logits"] is not None
 
 
 def test_local_path_disabled_when_scale_zero():

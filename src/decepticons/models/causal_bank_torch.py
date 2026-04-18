@@ -1830,6 +1830,14 @@ class CausalBankModel(nn.Module):
             hash_ctx = self._hash_memory(x)
             x = x + hash_ctx
 
+        # Stash post-transform, post-hash-memory state for forward_captured
+        # (non-adaptive path collapse, session-11 P2). Gated on eval so training
+        # never pays the retention. Matches the adaptive-branch pattern at the
+        # top of this function.
+        if not self.training:
+            self._last_states_nonadaptive = states.detach()
+            self._last_x_embed_nonadaptive = x.detach()
+
         n_bands = getattr(self.config, 'readout_bands', 1)
         if n_bands > 1 and hasattr(self, '_band_readouts'):
             # Grouped prediction: split modes by timescale, separate readout per band
@@ -1845,6 +1853,8 @@ class CausalBankModel(nn.Module):
                     band_states = states[..., i * band_size : (i + 1) * band_size]
                     band_features = torch.cat([band_states, x], dim=-1)
                     band_logits.append(readout(band_features))
+            if not self.training:
+                self._last_band_logits_list = [bl.detach() for bl in band_logits]
             return self._reshape_patch_logits(sum(band_logits))
 
         features = torch.cat([states, x], dim=-1)
@@ -1893,7 +1903,10 @@ class CausalBankModel(nn.Module):
         stacked = self._local_window_stack(x)
         if self._poly_order >= 2:
             stacked = self._expand_poly_features(stacked)
-        return self.local_readout(stacked)
+        logits = self.local_readout(stacked)
+        if not self.training:
+            self._last_local_logits = logits.detach()
+        return logits
 
     def set_ngram_table(self, table) -> None:
         """Inject an n-gram table for trust-routing mode."""
