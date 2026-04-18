@@ -725,21 +725,43 @@ class CausalBankModel(nn.Module):
                 self.bank_gate_logits.zero_()
 
     def param_groups(self, base_lr: float) -> list[dict]:
-        """Return parameter groups with per-hemisphere learning rates."""
-        if getattr(self, "_num_hemispheres", 1) != 2 or not (
-            getattr(self, "_use_state_augment", False)
-            or getattr(self, "_use_gated_retention_substrate", False)
-            or getattr(self, "_use_gated_delta_substrate", False)
-        ):
+        """Return parameter groups with per-hemisphere and per-omega LRs.
+
+        Two optional boosts:
+        - ``fast_lr_mult``: all SSM/gate/retention/delta params at N× base LR
+          when num_hemispheres==2 AND the relevant substrate is active.
+        - ``omega_lr_mult``: ``_adaptive_omega_proj`` params at N× base LR.
+          Heinrich's ω-unfreeze test: W_ω gradient is tiny at init (zero
+          weight, fp16-AMP-pressured), so even "learnable" ω barely trains.
+          Boosting just its LR tests whether the Fourier basis is a true
+          optimum or just an init attractor. Base mult = 1.0 (no change).
+        """
+        omega_mult = float(getattr(self.config, 'omega_lr_mult', 1.0) or 1.0)
+        boost_omega = omega_mult > 1.0 and hasattr(self, '_adaptive_omega_proj')
+
+        use_fast_hemis = (
+            getattr(self, "_num_hemispheres", 1) == 2
+            and (
+                getattr(self, "_use_state_augment", False)
+                or getattr(self, "_use_gated_retention_substrate", False)
+                or getattr(self, "_use_gated_delta_substrate", False)
+            )
+        )
+
+        if not use_fast_hemis and not boost_omega:
             return [{"params": list(self.parameters()), "lr": base_lr}]
 
         fast_params = []
         other_params = []
+        omega_params = []
 
         fast_mult = getattr(self.config, 'fast_lr_mult', 4.0)
 
         for name, param in self.named_parameters():
-            if (
+            if boost_omega and "_adaptive_omega_proj" in name:
+                omega_params.append(param)
+                continue
+            if use_fast_hemis and (
                 "_ssm_A" in name
                 or "_ssm_B_proj" in name
                 or "_ssm_C_proj" in name
@@ -764,6 +786,8 @@ class CausalBankModel(nn.Module):
         groups = []
         if fast_params:
             groups.append({"params": fast_params, "lr": base_lr * fast_mult})
+        if omega_params:
+            groups.append({"params": omega_params, "lr": base_lr * omega_mult})
         if other_params:
             groups.append({"params": other_params, "lr": base_lr})
         return groups
