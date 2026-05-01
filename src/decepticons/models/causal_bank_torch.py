@@ -1043,6 +1043,7 @@ class CausalBankModel(nn.Module):
         m_matrix = m_matrix.float()
         batch, seq_len, n_heads, head_dim = drive.shape
         half = head_dim // 2
+        device = drive.device
 
         # Unpack transition matrix elements: each [B, T, H, half]
         a00 = m_matrix[..., 0]
