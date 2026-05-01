@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>decepticons — O(n) attention is deception</title>
+<meta name="description" content="A backend-neutral kernel of predictive primitives — substrates, memory, gating, routing, readouts. Reusable across descendant systems without forking the kernel." />
+<meta property="og:title" content="decepticons — O(n) attention is deception" />
+<meta property="og:description" content="A backend-neutral kernel of predictive primitives. Reusable across descendant systems without forking the kernel." />
+<meta property="og:image" content="assets/logo.webp" />
+<meta name="theme-color" content="#0b0d10" />
+<link rel="icon" type="image/webp" href="assets/logo.webp" />
+<link rel="stylesheet" href="styles.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+<a href="#main" class="skip">Skip to content</a>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="#top">
+      <img src="assets/logo.webp" alt="" width="36" height="36" />
+      <span class="brand-name">decepticons</span>
+      <span class="brand-tag">kernel</span>
+    </a>
+    <nav class="nav">
+      <a href="#what">What</a>
+      <a href="#install">Install</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#causal-bank">Causal-bank</a>
+      <a href="#modules">Modules</a>
+      <a href="#docs">Docs</a>
+      <a class="github" href="https://github.com/asuramaya/decepticons" rel="noopener">GitHub →</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<section id="top" class="hero">
+  <div class="wrap hero-inner">
+    <div class="hero-text">
+      <p class="kicker"><span class="dot"></span> v0.1.0 · alpha · research kernel</p>
+      <h1>O(n) attention is <span class="accent">deception.</span></h1>
+      <p class="lede">
+        A backend-neutral kernel of predictive primitives — substrates, memory, gating, routing, readouts.
+        Downstream systems combine them into trained models without forking the kernel itself.
+      </p>
+      <div class="cta">
+        <a class="btn primary" href="#quickstart">Quickstart</a>
+        <a class="btn ghost" href="https://github.com/asuramaya/decepticons" rel="noopener">View on GitHub</a>
+      </div>
+      <ul class="badges">
+        <li>numpy-only kernel</li>
+        <li>torch · mlx backends</li>
+        <li>causality-verified</li>
+        <li>MIT</li>
+      </ul>
+    </div>
+    <div class="hero-art" aria-hidden="true">
+      <img src="assets/logo.webp" alt="" />
+    </div>
+  </div>
+</section>
+
+<section id="what" class="band">
+  <div class="wrap">
+    <h2>Scope</h2>
+    <p class="lede-sm">A sharp boundary. Mechanisms in. Policy out.</p>
+    <div class="two-col tight">
+      <div>
+        <h3 class="col-h good">In</h3>
+        <ul class="check">
+          <li>Substrate dynamics and memory primitives</li>
+          <li>Controller summaries, gates, routing, modulation</li>
+          <li>Feature views and reusable readouts</li>
+          <li>Head-factored scan, retention, gated-retention memory</li>
+          <li>Lightweight runtime, eval, and artifact accounting</li>
+          <li>Backend-neutral family metadata and deterministic substrate builders</li>
+          <li>Export helpers and shared contracts for descendants</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="col-h bad">Out</h3>
+        <ul class="cross">
+          <li>No training framework — that's <em>chronohorn</em></li>
+          <li>No fleet orchestration or scheduling</li>
+          <li>No benchmark-specific policy or frontier reporting</li>
+          <li>No packed-artifact economics</li>
+          <li>No legality, validity, or audit packaging</li>
+          <li>No transformer forensics — that's <em>heinrich</em></li>
+        </ul>
+      </div>
+    </div>
+    <p class="caption">
+      The rule: if a mechanism can be named without referencing a specific descendant, and used
+      unchanged by more than one downstream system, <strong class="ok">it belongs in the kernel</strong>.
+      Otherwise it stays in the descendant.
+    </p>
+  </div>
+</section>
+
+<section id="install" class="band alt">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="lede-sm">Python ≥ 3.11. The kernel itself only needs numpy.</p>
+    <div class="cards three">
+      <div class="card">
+        <h3>From source</h3>
+<pre><code>git clone https://github.com/asuramaya/decepticons
+cd decepticons
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .</code></pre>
+        <p class="muted">Once on PyPI: <code>pip install decepticons</code>.</p>
+      </div>
+      <div class="card">
+        <h3>With PyTorch</h3>
+<pre><code>pip install -e ".[torch]"</code></pre>
+        <p class="muted">Adds the PyTorch <code>CausalBankModel</code> and the routed squared-ReLU readouts.</p>
+      </div>
+      <div class="card">
+        <h3>With Apple MLX</h3>
+<pre><code>pip install -e ".[metal]"</code></pre>
+        <p class="muted">Adds the MLX backend equivalent for Apple Silicon.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart" class="band">
+  <div class="wrap">
+    <h2>Quickstart</h2>
+    <p class="lede-sm">Fit a byte-latent predictive coder on a paragraph and sample from it.</p>
+    <div class="cards two">
+      <div class="card">
+        <h3>Python</h3>
+<pre><code class="lang-python">from decepticons import ByteCodec, ByteLatentPredictiveCoder
+
+text = "predictive coding likes repeated structure.\n" * 64
+model = ByteLatentPredictiveCoder()
+report = model.fit(text)
+
+prompt = ByteCodec.encode_text("predictive ")
+sample = model.generate(prompt, steps=40, greedy=True)
+
+print(report.train_bits_per_byte)
+print(ByteCodec.decode_text(sample))</code></pre>
+        <p class="muted">A worked configuration lives in <a href="https://github.com/asuramaya/decepticons/blob/main/examples/quickstart.py">examples/quickstart.py</a>.</p>
+      </div>
+      <div class="card">
+        <h3>CLI</h3>
+<pre><code class="lang-bash">decepticons fit \
+  --input ./corpus.txt \
+  --prompt "predictive " \
+  --generate 80</code></pre>
+        <p class="muted">Single-command fit + sample over a UTF-8 corpus.</p>
+        <h3 style="margin-top: 1.8em">Verify causality</h3>
+<pre><code class="lang-bash">pytest tests/test_causality.py -v</code></pre>
+        <p class="muted">Every substrate mode is checked for future-leak under perturbation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture" class="band alt">
+  <div class="wrap">
+    <h2>Architecture</h2>
+    <p class="lede-sm">Three repos. One direction of dependency. One rule that controls what gets in.</p>
+
+    <div class="pipeline">
+      <div class="node primary">
+        <div class="node-tag">YOU ARE HERE</div>
+        <div class="node-name">decepticons</div>
+        <div class="node-role">kernel</div>
+        <div class="node-desc">substrates · memory · control · readouts</div>
+      </div>
+      <div class="connector"><span class="dep">imports</span></div>
+      <div class="node">
+        <div class="node-name">chronohorn</div>
+        <div class="node-role">runtime</div>
+        <div class="node-desc">training · replay · fleet · observation</div>
+      </div>
+      <div class="connector"><span class="dep">imports</span></div>
+      <div class="node">
+        <div class="node-name">heinrich</div>
+        <div class="node-role">forensics</div>
+        <div class="node-desc">geometry · activation traces · audit</div>
+      </div>
+    </div>
+
+    <p class="caption">
+      Dependencies flow left-to-right.
+      <strong class="ok">decepticons never imports its descendants</strong> —
+      enforced by an AST scan in
+      <a href="https://github.com/asuramaya/decepticons/blob/main/tests/test_dependency_firewall.py"><code>tests/test_dependency_firewall.py</code></a>
+      that fails CI if any descendant name leaks into the kernel.
+    </p>
+
+    <h3 class="sub">Inside the kernel</h3>
+    <div class="layers">
+      <div class="layer primary">
+        <div class="layer-num">01</div>
+        <div class="layer-body">
+          <h4>Kernel</h4>
+          <p><code>src/decepticons/</code> — substrate dynamics, controller summaries, memory primitives, feature views, readouts, runtime helpers, backend-neutral family metadata.</p>
+        </div>
+        <div class="layer-tag">public package</div>
+      </div>
+      <div class="layer">
+        <div class="layer-num">02</div>
+        <div class="layer-body">
+          <h4>Project descendants</h4>
+          <p><code>examples/projects/</code> — concrete descendant shapes (causal · oracle · bridge · byte-latent · noncausal) that pressure-test the kernel boundary without leaking policy back upward.</p>
+        </div>
+        <div class="layer-tag">boundary tests</div>
+      </div>
+      <div class="layer">
+        <div class="layer-num">03</div>
+        <div class="layer-body">
+          <h4>Tooling</h4>
+          <p><code>examples/tools/</code> — development and analysis scripts. Useful, not part of the public package.</p>
+        </div>
+        <div class="layer-tag">dev only</div>
+      </div>
+    </div>
+
+    <div class="rule">
+      <h3>Promotion rule</h3>
+      <p>Code moves into <code>src/</code> only when <em>all three</em> hold:</p>
+      <ol>
+        <li>It is a mechanism, not a project policy.</li>
+        <li>At least two descendants want the same thing.</li>
+        <li>The generalized API is simpler than keeping the duplication.</li>
+      </ol>
+      <p class="muted">The defense against turning the kernel into a renamed collection of branches.</p>
+    </div>
+  </div>
+</section>
+
+<section id="causal-bank" class="band">
+  <div class="wrap">
+    <h2>Causal-bank</h2>
+    <p class="lede-sm">
+      The most actively explored descendant family. A frozen linear substrate, an optional learned augment,
+      and a banded readout — assembled into models that train at O(n) and stay causal under perturbation.
+    </p>
+
+    <div class="grid four">
+      <div class="tile">
+        <h4>Substrate modes</h4>
+        <ul>
+          <li><code>frozen</code> — pure reservoir</li>
+          <li><code>learnable_decays</code> — decays trainable</li>
+          <li><code>learnable_mixing</code> — input projection trainable</li>
+          <li><code>learned_recurrence</code> — Mamba-style B/C, chunked scan</li>
+          <li><code>gated_retention</code> — learned matrix memory as the substrate</li>
+        </ul>
+      </div>
+      <div class="tile">
+        <h4>Memory attachment</h4>
+        <ul>
+          <li><code>none</code> — substrate only</li>
+          <li><code>ngram</code> — smoothed n-gram prior</li>
+          <li><code>exact_context</code> — exact-history cache</li>
+          <li><code>statistical_backoff</code> — fitted backoff mixture</li>
+        </ul>
+      </div>
+      <div class="tile">
+        <h4>Selective scan</h4>
+        <ul>
+          <li><code>state_dim</code> — inner recurrent width</li>
+          <li><code>state_impl</code> — <code>scan</code> or <code>retention</code></li>
+          <li><code>num_heads</code> — head-factored memory</li>
+          <li><code>readout_bands</code> — split timescale interference</li>
+        </ul>
+      </div>
+      <div class="tile">
+        <h4>Stability &amp; geometry</h4>
+        <ul>
+          <li><code>training_noise</code>, <code>adaptive_reg</code></li>
+          <li><code>num_hemispheres</code>, <code>fast_lr_mult</code></li>
+          <li><code>local_poly_order</code>, <code>substrate_poly_order</code></li>
+          <li><code>patch_size</code>, <code>patch_causal_decoder</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="muted">
+      Full configuration surface lives on the <code>CausalBankConfig</code> docstring in
+      <a href="https://github.com/asuramaya/decepticons/blob/main/src/decepticons/causal_bank.py"><code>causal_bank.py</code></a>.
+    </p>
+  </div>
+</section>
+
+<section id="modules" class="band alt">
+  <div class="wrap">
+    <h2>Modules</h2>
+    <p class="lede-sm">The kernel by category. Full mapping in the <a href="https://github.com/asuramaya/decepticons/blob/main/docs/kernel_matrix.md">kernel matrix</a>.</p>
+    <div class="grid four">
+      <div class="tile"><h4>Substrates</h4>
+        <p>Echo-state, delay, linear-memory, oscillatory, mixed, and hierarchical multi-timescale substrates with config-driven dispatch.</p>
+        <p class="muted"><code>substrates.py</code> · <code>factories.py</code></p>
+      </div>
+      <div class="tile"><h4>Control &amp; routing</h4>
+        <p>Controller summaries, pathway gates, summary routing, hormone modulation, and a compact predictive-surprise primitive.</p>
+        <p class="muted"><code>control.py</code> · <code>gating.py</code> · <code>routing.py</code> · <code>modulation.py</code></p>
+      </div>
+      <div class="tile"><h4>Memory</h4>
+        <p>Exact-context, n-gram, statistical-backoff, and online n-gram memories — plus unified cache-view records over all four.</p>
+        <p class="muted"><code>exact_context.py</code> · <code>ngram_memory.py</code> · <code>statistical_backoff.py</code></p>
+      </div>
+      <div class="tile"><h4>Views</h4>
+        <p>Byte-latent, hierarchical, and linear-memory feature views, sampled multiscale readout, probability diagnostics, bridge features.</p>
+        <p class="muted"><code>views.py</code> · <code>hierarchical_views.py</code> · <code>sampled_readout.py</code></p>
+      </div>
+      <div class="tile"><h4>Readouts &amp; experts</h4>
+        <p>Ridge readout, frozen-readout expert, sampled multiscale readout, GRU recurrent readout, routed squared-ReLU experts.</p>
+        <p class="muted"><code>readouts.py</code> · <code>experts.py</code> · <code>models/readouts_torch.py</code></p>
+      </div>
+      <div class="tile"><h4>Adapters</h4>
+        <p>Shared contracts for causal-predictive, oracle-analysis, bridge-export, noncausal-reconstructive, and paired teacher/export descendants.</p>
+        <p class="muted"><code>causal_predictive.py</code> · <code>bridge_export.py</code> · <code>oracle_analysis.py</code></p>
+      </div>
+      <div class="tile"><h4>Runtime</h4>
+        <p>Sequence traces, fit reports, rollout evaluation, transfer probes, train-mode checkpoints, artifact accounting and audits.</p>
+        <p class="muted"><code>runtime.py</code> · <code>eval.py</code> · <code>train_eval.py</code> · <code>artifacts.py</code></p>
+      </div>
+      <div class="tile"><h4>Backends</h4>
+        <p>PyTorch and MLX <code>CausalBankModel</code> implementations: frozen substrate, selective scan augment, banded readout.</p>
+        <p class="muted"><code>models/causal_bank_torch.py</code> · <code>models/causal_bank_mlx.py</code></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="causality" class="band">
+  <div class="wrap">
+    <h2>Causality</h2>
+    <p class="lede-sm">Non-negotiable. CI fails if any substrate mode leaks the future.</p>
+    <div class="two-col tight">
+      <div>
+        <p>
+          The test in
+          <a href="https://github.com/asuramaya/decepticons/blob/main/tests/test_causality.py"><code>tests/test_causality.py</code></a>
+          feeds two identical sequences up to position <em>t</em>, different after.
+          If logits at position <em>t</em> differ between the two, the substrate has seen the future
+          and the test fails.
+        </p>
+        <p class="muted">
+          An earlier research line lost months to an accidentally-unfrozen <code>causal_mask</code>
+          that broke causality silently. This test exists to make that failure mode loud and instant.
+        </p>
+      </div>
+      <div class="card pinned">
+        <h3>Modes verified</h3>
+        <ul class="check tight">
+          <li><code>frozen</code></li>
+          <li><code>learnable_mixing</code></li>
+          <li><code>learnable_decays</code></li>
+          <li>selective scan augment (<code>state_dim &gt; 0</code>)</li>
+          <li><code>readout_bands</code></li>
+          <li>routed experts</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="docs" class="band alt">
+  <div class="wrap">
+    <h2>Documentation</h2>
+    <p class="lede-sm">Six docs cover the full kernel surface, from extraction rule to research anchors.</p>
+    <div class="grid three">
+      <a class="tile linkcard" href="https://github.com/asuramaya/decepticons/blob/main/docs/architecture.md">
+        <h4>Architecture</h4>
+        <p>Three-layer model, package map, and the promotion rule that controls what gets in.</p>
+      </a>
+      <a class="tile linkcard" href="https://github.com/asuramaya/decepticons/blob/main/docs/kernel_matrix.md">
+        <h4>Kernel matrix</h4>
+        <p>Capability matrix — every kernel area mapped to its module.</p>
+      </a>
+      <a class="tile linkcard" href="https://github.com/asuramaya/decepticons/blob/main/docs/chronohorn_boundary.md">
+        <h4>Chronohorn boundary</h4>
+        <p>Where the kernel ends and the runtime descendant begins. Mechanism vs policy.</p>
+      </a>
+      <a class="tile linkcard" href="https://github.com/asuramaya/decepticons/blob/main/docs/downstream_patterns.md">
+        <h4>Downstream patterns</h4>
+        <p>Causal, noncausal, oracle, bridge, and byte-latent descendant patterns.</p>
+      </a>
+      <a class="tile linkcard" href="https://github.com/asuramaya/decepticons/blob/main/docs/related_work.md">
+        <h4>Related work</h4>
+        <p>Research anchors and prior art across predictive coding, reservoir computing, and rate-distortion.</p>
+      </a>
+      <a class="tile linkcard" href="https://github.com/asuramaya/decepticons/blob/main/docs/landscape.md">
+        <h4>Ecosystem landscape</h4>
+        <p>Where this kernel sits relative to the open ecosystem (March 2026 snapshot).</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <div>
+      <strong>decepticons</strong> · v0.1.0 · MIT · research kernel
+    </div>
+    <div class="foot-links">
+      <a href="https://github.com/asuramaya/decepticons">GitHub</a>
+      <a href="https://github.com/asuramaya/decepticons/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/asuramaya/decepticons/blob/main/CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/asuramaya/decepticons/issues">Issues</a>
+      <a href="https://github.com/asuramaya/decepticons/blob/main/LICENSE">License</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
