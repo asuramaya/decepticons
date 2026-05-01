@@ -1,104 +1,111 @@
 # Architecture
 
-This document is the shortest route to understanding the repo as code rather than as a historical story.
+The shortest route to understanding the repo as code rather than as a historical
+story. For the public website version of this material, see
+[the project site](https://asuramaya.github.io/decepticons/). For the kernel
+boundary against the runtime descendant, see
+[`chronohorn_boundary.md`](./chronohorn_boundary.md).
 
-## Reading Order
+## Three Layers
 
-If you are new to the repo, read things in this order:
+```
+src/decepticons/        →  reusable kernel (public package)
+examples/projects/      →  descendant boundary tests
+examples/tools/         →  development and analysis tooling
+```
 
-1. [`README.md`](../README.md)
-2. [`kernel_matrix.md`](./kernel_matrix.md)
-3. [`frontier_pass.md`](./frontier_pass.md)
-4. this file
-5. [`examples/README.md`](../examples/README.md)
-6. [`lineage.md`](./lineage.md)
-7. the specific example project README you care about
+### 1. Kernel — `src/decepticons/`
 
-Use [`related_work.md`](./related_work.md) and [`landscape.md`](./landscape.md) for research and ecosystem context, not
-for code orientation.
-
-## Layer Model
-
-The repo is intentionally split into three layers.
-
-### 1. Kernel
-
-The `src/decepticons/` package contains reusable mechanisms only.
-
-It owns:
+The kernel owns reusable mechanisms only:
 
 - substrate dynamics
 - controller-side summaries, gates, routing, and modulation
 - memory, latent, and learned patch-latent primitives
-- family-neutral probability diagnostics and bridge-side feature transforms
+- family-neutral probability diagnostics and bridge feature transforms
 - feature views and sampled readout
 - readouts, experts, and scoring utilities
-- runtime surfaces like traces, eval, train modes, and artifact accounting
-- the shared contracts above those primitives when they stay mechanism-level: causal, oracle, bridge-export, noncausal reconstruction, paired teacher/export, and artifact-boundary audit helpers
+- runtime surfaces (traces, eval, train modes, artifact accounting)
+- shared mechanism-level contracts for causal, oracle, bridge-export, noncausal
+  reconstruction, paired teacher/export, and artifact audit
 
-It does not own:
+It does **not** own:
 
 - project-specific legality rules
 - benchmark claims
-- one descendant's routing policy
-- one descendant's latent composition policy
+- one descendant's routing or composition policy
 - one descendant's oracle privileges
 - teacher-export policy
 - payload-wire policy
 - higher-order causal program/controller policy
 
-### 2. Project-Layer Descendants
+### 2. Project Descendants — `examples/projects/`
 
-The `examples/projects/` tree is where the kernel gets pressure-tested by actual descendant shapes.
+Pressure-tests the kernel boundary with concrete descendant shapes. These are
+not toy demos — they exist so the kernel boundary is drawn under realistic
+load. Five families:
 
-These are not toy demos. They are boundary tests.
+- `ancestor/` — hierarchical predictive baseline
+- `causal/` — causal composition policies (memory, repair, packed, cache, …)
+- `bridge/` — bridge-style boundary descendants
+- `noncausal/` — field reconstruction and replay
+- `oracle/` — analysis-only bidirectional descendants
+- `byte_latent/` — byte-patch latent descendants
 
-- `ancestor/hierarchical_predictive/`
-  ancestor-style hierarchical substrate plus predictor/gating policy
-- `causal/exact_context_repair/`
-  early exact-context causal memory shape
-- `causal/memory_stability/`, `causal/linear_correction/`, `causal/residual_repair/`
-  three different causal composition policies built from kernel primitives
-- `causal/statistical_memory/`
-  causal example that composes the shared statistical-backoff memory layer and exact-context repair
-- `causal/packed_memory_controller/`
-  causal memory-first descendant that adds an example-local trust controller over shared backoff priors and exact repair
-- `causal/cache_repair/`
-  causal descendant that uses the shared cache-view layer directly and keeps only the repair gate local
-- `bridge/proxy_features/`
-  bridge-style descendant that turns probability streams into causal proxy features
-- `bridge/feature_export/`
-  bridge-style descendant that packages paired probability streams into a small export/report flow
-- `bridge/agreement_export/`
-  bridge-style descendant that focuses on agreement and disagreement over paired probability streams
-- `bridge/support_export/`
-  bridge-style descendant that exports shared cache-view support/order summaries through the shared teacher/export contract
-- `noncausal/field_reconstruction/`
-  noncausal field reconstruction descendant built from bidirectional context, exact-context memory, and replay accounting
-- `noncausal/replay_fields/`
-  noncausal descendant that overlays field-shaped spans on the shared replay surface and keeps field policy local
-- `oracle/bidirectional_analysis/`
-  analysis-only descendant that reuses sampled readout, routing, and train-mode checkpoints
-- `byte_latent/patch_latent/`
-  byte-patch latent descendant shaped as a general patch-latent example
+If a mechanism is repeated across multiple descendants, it is a candidate for
+promotion into `src/`.
 
-If a mechanism is repeated across multiple descendants, it is a candidate for promotion into `src/`.
-The shared causal, oracle, and bridge adapters are the current examples of that rule: they live in `src/` only where
-they read as shared contracts rather than descendant-specific models.
+### 3. Tooling — `examples/tools/`
 
-### 3. Development Tooling
+Development and analysis support, not kernel code. Currently:
 
-The `examples/tools/` tree is for development and analysis support, not kernel code.
+- `examples/tools/diagnostics/` — reusable analysis helpers used by the example
+  smokes and project READMEs.
 
-Right now that mainly means:
+## Promotion Rule
 
-- `examples/tools/diagnostics/`
+Code moves from a project into `src/` only when **all three** hold:
 
-This keeps `look.py` / `look2.py` / `silence_test.py` style workflows available without polluting the public package.
+1. It is a mechanism, not a project policy.
+2. At least two descendants want the same thing.
+3. The generalized API is simpler than keeping the duplication in project code.
+
+This rule is the main defense against turning the kernel into a renamed
+collection of branches.
+
+Recent promotions of the right kind:
+
+- `LinearMemorySubstrate`
+- `FrozenReadoutExpert`
+- `PredictiveSurpriseController`
+- `HormoneModulator`
+- `SampledMultiscaleReadout`
+- `TrainModeConfig`
+- `ArtifactMetadata` / `ReplaySpan` / `ArtifactAccounting`
+- `select_scored_spans` / `replay_spans_from_scores`
+- `ProbabilityDiagnostics` / `probability_diagnostics`
+- `ExactContextCache` / `StatisticalBackoffCache`
+- `CausalPredictiveAdapter`
+- `OracleAnalysisAdapter`
+- `BridgeExportAdapter`
+- `NoncausalReconstructiveAdapter`
+- `TeacherExportAdapter`
+- `ArtifactAuditRecord` / `ArtifactAuditSummary`
+
+Still project-local on purpose:
+
+- descendant mixer and residual-repair policy
+- interpretation and reporting around oracle comparisons
+- rate-distortion weighting, second compression stage, and quantization/export
+  policy in the patch-latent example
+- project-specific bridge/export policy above the shared probability-to-feature
+  transforms
+- ancestor-specific predictor head choices
 
 ## Package Map
 
 The kernel is easiest to understand by category rather than by filename order.
+For the full capability matrix and module pointers, see
+[`kernel_matrix.md`](./kernel_matrix.md).
 
 ### Foundation
 
@@ -117,7 +124,7 @@ The kernel is easiest to understand by category rather than by filename order.
 - [`substrates.py`](../src/decepticons/substrates.py)
 - [`factories.py`](../src/decepticons/factories.py)
 
-### Control And Side Channels
+### Control and side channels
 
 - [`control.py`](../src/decepticons/control.py)
 - [`gating.py`](../src/decepticons/gating.py)
@@ -125,7 +132,7 @@ The kernel is easiest to understand by category rather than by filename order.
 - [`modulation.py`](../src/decepticons/modulation.py)
 - [`predictive_surprise.py`](../src/decepticons/predictive_surprise.py)
 
-### Memory, Latents, And Views
+### Memory, latents, and views
 
 - [`bridge_features.py`](../src/decepticons/bridge_features.py)
 - [`bidirectional_context.py`](../src/decepticons/bidirectional_context.py)
@@ -143,7 +150,7 @@ The kernel is easiest to understand by category rather than by filename order.
 - [`hierarchical_views.py`](../src/decepticons/hierarchical_views.py)
 - [`sampled_readout.py`](../src/decepticons/sampled_readout.py)
 
-### Readouts, Experts, And Runtime
+### Readouts, experts, and runtime
 
 - [`readout.py`](../src/decepticons/readout.py)
 - [`readouts.py`](../src/decepticons/readouts.py)
@@ -155,172 +162,36 @@ The kernel is easiest to understand by category rather than by filename order.
 - [`train_modes.py`](../src/decepticons/train_modes.py)
 - [`artifacts.py`](../src/decepticons/artifacts.py)
 
-### Adapters And Presets
+### Adapters and presets
 
 - [`adapters.py`](../src/decepticons/adapters.py)
 - [`causal_predictive.py`](../src/decepticons/causal_predictive.py)
 - [`bridge_export.py`](../src/decepticons/bridge_export.py)
 - [`oracle_analysis.py`](../src/decepticons/oracle_analysis.py)
+- [`noncausal_reconstructive.py`](../src/decepticons/noncausal_reconstructive.py)
+- [`teacher_export.py`](../src/decepticons/teacher_export.py)
 - [`model.py`](../src/decepticons/model.py)
 - [`presets.py`](../src/decepticons/presets.py)
 - [`cli.py`](../src/decepticons/cli.py)
 
-## Promotion Rule
-
-Code moves from a project into `src/` only when all of these are true:
-
-1. it is a mechanism rather than a project policy
-2. at least two descendants want the same thing
-3. the generalized API is simpler than keeping the duplication in project code
-
-That rule is the main defense against turning the kernel into a renamed collection of branches.
-
-## Current Boundary
-
-Stable kernel examples of the right kind of promotion:
-
-- `LinearMemorySubstrate`
-- `FrozenReadoutExpert`
-- `PredictiveSurpriseController`
-- `HormoneModulator`
-- `SampledMultiscaleReadout`
-- `TrainModeConfig`
-- `ArtifactMetadata` / `ReplaySpan` / `ArtifactAccounting`
-- `select_scored_spans` / `replay_spans_from_scores`
-- `ProbabilityDiagnostics` / `probability_diagnostics`
-- `ExactContextCache` / `StatisticalBackoffCache`
-
-Still project-local on purpose:
-
-- descendant mixer and residual-repair policy
-- interpretation and reporting around oracle comparisons
-- rate-distortion weighting, second compression stage, and quantization/export policy in the patch-latent example
-- project-specific bridge/export policy above the shared probability-to-feature transforms
-- ancestor-specific predictor head choices
-
-Recent shared promotion:
-
-- `CausalPredictiveAdapter`
-- `OracleAnalysisAdapter`
-- `BridgeExportAdapter`
-- `NoncausalReconstructiveAdapter`
-- `TeacherExportAdapter`
-- `ArtifactAuditRecord` / `ArtifactAuditSummary`
-
-## Causal-Bank Configuration Surface
+## Causal-Bank Family
 
 The causal-bank family (`causal_bank.py`) is the most actively explored
-descendant family. Its configuration surface includes:
+descendant family. The full configuration surface — input projection schemes,
+oscillatory schedules, substrate modes, memory attachment, stacked blocks,
+selective scan, readout geometry, byte-to-patch encoding, fast/slow splitting,
+polynomial expansion, stability controls — is documented in the
+`CausalBankConfig` docstring at
+[`src/decepticons/causal_bank.py`](../src/decepticons/causal_bank.py).
 
-### Input Projection Schemes (`input_proj_scheme`)
+Highlights of what it can be configured to do:
 
-- `random` — default, Gaussian scaled by 1/sqrt(embedding_dim)
-- `orthogonal_rows` — QR-factorized orthogonal basis
-- `split_banks` — separate subspaces for oscillatory and non-oscillatory modes
-  - `_orthogonal_rows_in_proj` shape fix applied for high `osc_frac` values
-- `kernel_energy` — energy-weighted by mode RMS
-
-### Oscillatory Scheduling (`oscillatory_schedule`)
-
-- `logspace` — simple logarithmic spacing of periods and half-lives
-- `mincorr_greedy` — greedy selection minimizing pairwise correlation among candidate pairs
-- `period_bucket_greedy` — bucketed half-lives with greedy period selection within each bucket
-
-### Substrate Modes (`substrate_mode`)
-
-- `frozen` — fixed random projection, no gradient through substrate
-- `learnable_decays` — decay rates are gradient-tracked parameters
-- `learnable_mixing` — mixing weights are gradient-tracked parameters
-- `learned_recurrence` — full selective scan with Mamba-style input-dependent B/C projections; chunked parallel scan implementation
-- `gated_retention` — learned multi-head matrix memory becomes the primary substrate instead of an additive augment
-
-### Memory Attachment (`memory_kind` / `MemoryAttachmentConfig`)
-
-- `none` — no auxiliary memory
-- `ngram` — n-gram prior lookup
-- `exact_context` — exact context cache
-- `statistical_backoff` — backoff hierarchy over n-gram and exact-context layers
-
-`OnlineCausalMemory` is a runtime n-gram accumulator with a 7-feature query
-interface that updates incrementally during training without a separate build step.
-
-### Stacked Substrate Blocks
-
-- `num_blocks` — number of stacked substrate blocks (default 1)
-- `block_mixing_ratio` — bottleneck mixing fraction between blocks
-- `block_stride` — multi-timescale striding: block `i` operates at stride `block_stride^i`
-
-### Selective Scan Dimensions
-
-- `state_dim` — inner recurrent state width for the learned-state path
-- `state_impl` — learned-state implementation (`scan` or `retention`)
-- `num_heads` — number of learned-state heads
-- under `gated_retention`, this state surface is promoted from an augment to the primary substrate
-
-### Readout Geometry
-
-- `readout_bands` — split readout by timescale band to reduce interference across the fixed/learned bank mixture
-
-### Byte-to-Patch Encoding
-
-- `patch_size` — number of raw bytes per patch (1 = no patching)
-- `patch_causal_decoder` — decoder applied after patch embedding:
-  - `none` — no patch decoder
-  - `autoregressive` — left-to-right patch token prediction
-  - `mlp_factored` — independent per-byte MLP heads
-  - `hybrid` — global SSM over patches plus local window over raw bytes
-
-### Fast/Slow State Splitting
-
-- `num_hemispheres` — number of hemispheres (2 = fast + slow)
-- `fast_hemisphere_ratio` — fraction of state allocated to the fast hemisphere
-- `fast_lr_mult` — learning rate multiplier applied to fast-hemisphere parameters
-
-### Polynomial Feature Expansion
-
-- `local_poly_order` — NVAR polynomial expansion order on local window features
-- `substrate_poly_order` — polynomial expansion order on substrate output before readout
-
-### Stability Controls
-
-- `training_noise` — Gaussian noise injected into substrate state during forward
-- `adaptive_reg` — automatically scales regularization based on live gradient statistics
-- Decay regularization term added to training loss
-
-### Readout Kinds
-
-The `CAUSAL_BANK_READOUT_KINDS` registry now includes `gru` (recurrent GRU readout)
-in addition to the existing linear and MLP variants.
-
-### Validation Helpers
-
-- `learnable_substrate_keys()` — returns the set of config keys that are
-  gradient-tracked under the given `substrate_mode`
-- Period and half-life range validation with descriptive error messages on
-  out-of-range values
-
-### Downstream Threading
-
-When a new config knob is added to `CausalBankConfig`, the Chronohorn training
-CLI must wire it through its scan system (`_training_spec()` and
-`_torch_train_command()`). Chronohorn maintains a consistency test that validates
-this wiring.
-
-## Immediate Architectural Direction
-
-The current pressure from the descendant runtime is narrower and more concrete:
-
-- make learned memory do more of the real work
-- keep the path O(n) in sequence length
-- separate readout wins from actual substrate wins
-- only promote mechanisms that survive scale and longer context
-
-For the active causal-bank line that means:
-
-- `readout_bands` to reduce timescale interference at readout
-- `scan` and `retention` as head-factored learned-state paths
-- `gated_retention` as the first primary learned substrate replacing the fixed bank on the cheap lane
-- keeping fleet policy, promotion logic, and benchmark claims in `chronohorn`, not here
-
-The older shared-contract work still matters, but the immediate kernel question is simpler:
-can a reusable learned-memory substrate beat the fixed-bank ceiling without giving up O(n) execution?
+- frozen, learnable-decays, learnable-mixing, full learned recurrence, or
+  gated-retention substrate modes
+- attached n-gram, exact-context, or statistical-backoff memory
+- stacked multi-timescale substrate blocks
+- selective scan augment with per-head retention or scan
+- timescale-banded readouts
+- byte-to-patch encoding with autoregressive, MLP-factored, or hybrid decoders
+- fast/slow hemisphere split with separate learning rates
+- adaptive regularization and training-noise stability controls

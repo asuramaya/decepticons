@@ -1,3 +1,5 @@
+"""Backend-neutral helpers shared by the torch and MLX model implementations."""
+
 from __future__ import annotations
 
 import hashlib

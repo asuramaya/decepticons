@@ -4,7 +4,7 @@
 
 It keeps the kernel contract narrow:
 
-- bidirectional replay and reconstruction come from [`NoncausalReconstructiveAdapter`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/noncausal_reconstructive.py)
+- bidirectional replay and reconstruction come from [`NoncausalReconstructiveAdapter`](../../../../src/decepticons/noncausal_reconstructive.py)
 - local field slicing stays in the example
 
 The only local policy is field-oriented overlap accounting: how much of the adapter's replay surface lands inside

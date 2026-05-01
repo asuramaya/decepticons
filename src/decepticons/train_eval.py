@@ -1,3 +1,5 @@
+"""Weighted dataset eval, rollout curves, and transfer probes for trained adapters."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence

@@ -4,9 +4,9 @@ This example is a causal memory-first descendant built from current kernel primi
 
 It stays in project space on purpose:
 
-- packed statistical memory comes from [`NgramMemory`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/ngram_memory.py)
-- exact repair comes from [`ExactContextMemory`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/exact_context.py)
-- trust features come from [`bridge_feature_arrays`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/bridge_features.py)
+- packed statistical memory comes from [`NgramMemory`](../../../../src/decepticons/ngram_memory.py)
+- exact repair comes from [`ExactContextMemory`](../../../../src/decepticons/exact_context.py)
+- trust features come from [`bridge_feature_arrays`](../../../../src/decepticons/bridge_features.py)
 - the tiny trust controller is example-local policy, not a kernel abstraction
 
 This is a rebuild of the current memory-first frontier shape:

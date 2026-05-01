@@ -1,3 +1,5 @@
+"""PyTorch causal-bank model: frozen substrate, selective scan augment, banded readout."""
+
 from __future__ import annotations
 
 import math

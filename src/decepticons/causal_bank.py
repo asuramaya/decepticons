@@ -1,3 +1,5 @@
+"""Causal-bank family: backend-neutral metadata, deterministic substrate construction, and config validation."""
+
 from __future__ import annotations
 
 import math

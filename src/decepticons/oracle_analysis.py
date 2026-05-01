@@ -1,3 +1,5 @@
+"""Shared oracle-analysis adapter — bidirectional structure analysis without runtime claims."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence

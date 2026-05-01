@@ -1,6 +1,6 @@
-from __future__ import annotations
+"""PyTorch readout modules: MLP, GRU, and routed squared-ReLU experts."""
 
-"""Torch readout modules for Chronohorn descendant models."""
+from __future__ import annotations
 
 from typing import Any
 

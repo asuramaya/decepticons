@@ -1,3 +1,5 @@
+"""Lightweight evaluation: next-step scoring and rollout evaluation over fitted models."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence

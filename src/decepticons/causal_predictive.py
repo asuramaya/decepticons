@@ -1,3 +1,5 @@
+"""Shared causal predictive adapter — prefix-only runtime contract over kernel primitives."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence

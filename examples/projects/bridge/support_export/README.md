@@ -4,9 +4,9 @@
 
 It uses:
 
-- [`ExactContextCache`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/memory_cache.py)
-- [`StatisticalBackoffCache`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/memory_cache.py)
-- [`TeacherExportAdapter`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/teacher_export.py)
+- [`ExactContextCache`](../../../../src/decepticons/memory_cache.py)
+- [`StatisticalBackoffCache`](../../../../src/decepticons/memory_cache.py)
+- [`TeacherExportAdapter`](../../../../src/decepticons/teacher_export.py)
 
 The local policy is simple:
 

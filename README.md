@@ -4,183 +4,155 @@
   <img src="docs/logo.webp" alt="Decepticons" width="520">
 </p>
 
-O(n) attention is deception. Shared kernel for predictive descendants that want reusable memory and readout primitives without inheriting one runtime's policy.
+<p align="center">
+  <a href="https://github.com/asuramaya/decepticons/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/asuramaya/decepticons/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/asuramaya/decepticons/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue">
+  <img alt="Status" src="https://img.shields.io/badge/status-alpha-orange">
+</p>
 
-`decepticons` extracts reusable model mechanisms from a broader
-experiment family so downstream systems can specialize without forking the
-kernel itself.
+<p align="center">
+  <a href="https://asuramaya.github.io/decepticons/"><b>Website</b></a> ·
+  <a href="./docs/architecture.md">Architecture</a> ·
+  <a href="./docs/kernel_matrix.md">Kernel matrix</a> ·
+  <a href="./examples/README.md">Examples</a> ·
+  <a href="./docs/related_work.md">Related work</a>
+</p>
 
-## What It Does
+> **O(n) attention is deception.** A backend-neutral kernel of predictive
+> primitives — substrates, memory, gating, routing, readouts — that downstream
+> systems combine into trained models without forking the kernel itself.
 
-`decepticons` provides the mechanism layer:
-
-- reusable substrates and memory primitives
-- controller summaries, gates, routing, and modulation
-- reusable readout and feature-view building blocks
-- lightweight runtime and evaluation helpers
-- backend-neutral family metadata and deterministic substrate builders, such as
-  `decepticons.causal_bank`
-- primary learned-substrate and augment primitives for the active causal-bank line,
-  including head-factored scan, retention, and gated-retention memory surfaces
-- export helpers and contracts for descendant systems
-
-It is intentionally not a full runtime system:
-
-- no fleet orchestration
-- no benchmark-specific policy
-- no packed-artifact economics
-- no external evidence or audit packaging
-
-That work belongs in descendants such as `chronohorn`.
+`decepticons` is the shared mechanism layer for predictive descendants. It
+extracts the reusable parts (substrate dynamics, controller summaries, memory
+primitives, feature views, readouts, runtime helpers) from a broader experiment
+family so downstream systems can specialize without forking the kernel.
 
 ## Install
 
-```bash
-python3 -m pip install -e .
-```
-
-Quick start:
+Python ≥ 3.11. Numpy is the only hard dependency for the kernel.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-python3 examples/quickstart.py
 ```
 
-## CLI
+For the model backends:
 
 ```bash
-decepticons fit --input ./corpus.txt --prompt "predictive " --generate 80
+pip install -e ".[torch]"   # PyTorch CausalBankModel + routed readouts
+pip install -e ".[metal]"   # Apple MLX backend
 ```
 
-## Python
+## Quickstart
 
 ```python
 from decepticons import ByteCodec, ByteLatentPredictiveCoder
 
 text = "predictive coding likes repeated structure.\n" * 64
 model = ByteLatentPredictiveCoder()
-fit_report = model.fit(text)
+report = model.fit(text)
 
 prompt = ByteCodec.encode_text("predictive ")
 sample = model.generate(prompt, steps=40, greedy=True)
 
-print(fit_report.train_bits_per_byte)
+print(report.train_bits_per_byte)
 print(ByteCodec.decode_text(sample))
 ```
 
-## Architecture
+CLI:
 
-The intended ecosystem split is:
-
-```text
-decepticons -> chronohorn -> heinrich
-kernel                 runtime       evidence / audit
+```bash
+decepticons fit --input ./corpus.txt --prompt "predictive " --generate 80
 ```
 
-Ownership is simple:
+A complete worked example lives in
+[`examples/quickstart.py`](./examples/quickstart.py). For descendant-shaped
+projects, see [`examples/projects/`](./examples/projects).
 
-- `decepticons`
-  - family-neutral predictive mechanisms
-  - reusable substrate, memory, control, and readout primitives
-  - backend-neutral family metadata
-  - export ABI helpers
-- `chronohorn`
-  - training, replay, scoring, fleet execution, and runtime observation
-- `heinrich`
-  - external validation, evidence packaging, and audit compression
+## What's in the kernel
 
-## Kernel Boundary
+| Area | Highlights |
+| --- | --- |
+| **Substrates** | recurrent, delay, linear-memory, oscillatory, mixed, hierarchical |
+| **Control** | controller summaries, pathway gates, summary routing, hormone modulation, predictive surprise |
+| **Memory** | exact-context, n-gram, statistical-backoff, online n-gram, cache views |
+| **Views** | byte-latent, hierarchical, linear-memory, sampled multiscale, bridge features, probability diagnostics |
+| **Readouts** | ridge, frozen-readout expert, sampled multiscale, GRU recurrent, routed squared-ReLU |
+| **Adapters** | causal predictive, oracle analysis, bridge export, noncausal reconstructive, paired teacher/export |
+| **Runtime** | traces, fit reports, rollout evaluation, transfer probes, train-mode checkpoints, artifact accounting |
+| **Causal-bank** | family metadata + deterministic substrate construction (frozen / learnable-decays / learnable-mixing / learned-recurrence / gated-retention) |
+| **Backends** | numpy-only kernel; PyTorch and MLX `CausalBankModel` implementations |
 
-What belongs in the kernel:
+Full capability matrix: [`docs/kernel_matrix.md`](./docs/kernel_matrix.md).
 
-- substrate dynamics
-- predictive and exact-context memory primitives
-- controller summaries, gating, routing, and modulation
-- reusable readouts and feature views
-- lightweight runtime and evaluation helpers
-- export-friendly deterministic family/config surfaces
+## Architecture
 
-What does not belong in the kernel:
+```
+decepticons  ──→  chronohorn  ──→  heinrich
+  kernel          runtime          evidence / audit
+ (this repo)   training, fleet     model forensics
+```
 
-- one descendant's training recipe
-- one descendant's artifact format
-- one descendant's leaderboard or frontier story
-- one descendant's legality or audit policy
-- one descendant's fleet/runtime orchestration
+Three layers inside this repo:
 
-If a mechanism can be named without reference to a specific descendant and used
-unchanged by more than one downstream system, it belongs here. Otherwise it
-stays in the descendant.
+1. **Kernel** — `src/decepticons/`. Public package. Reusable mechanisms only.
+2. **Project descendants** — `examples/projects/`. Pressure-tests the kernel
+   boundary with concrete descendant shapes (causal · oracle · bridge · noncausal · byte-latent).
+3. **Tooling** — `examples/tools/`. Development and analysis scripts. Not part
+   of the public package.
 
-## Modules
+Code moves into `src/` only when **all three** hold:
 
-- `substrates`
-  - recurrent, delay, linear-memory, oscillatory-memory, mixed-memory, and hierarchical substrate primitives
-- `control`, `controllers`, `gating`, `routing`, `modulation`
-  - reusable controller-side mechanisms
-- `exact_context`, `ngram_memory`, `statistical_backoff`
-  - causal memory primitives
-  - `OnlineCausalMemory` — runtime n-gram accumulator with 7-feature query interface
-- `views`, `hierarchical_views`, `linear_views`
-  - feature and summary views
-- `readouts`, `experts`
-  - reusable readout surfaces (now includes GRU recurrent readout)
-- `causal_bank`
-  - backend-neutral causal-bank family metadata and deterministic substrate construction
-  - new config fields: `substrate_mode`, `memory_kind`, `num_blocks`, `block_mixing_ratio`,
-    `block_stride`, `state_dim`, `state_impl`, `num_heads`, `patch_size`, `patch_causal_decoder`,
-    `num_hemispheres`, `fast_hemisphere_ratio`, `fast_lr_mult`, `local_poly_order`,
-    `substrate_poly_order`, `training_noise`, `adaptive_reg`
-  - readout geometry knobs such as `readout_bands`
-  - `learnable_substrate_keys()` helper
-  - chunked parallel scan for `learned_recurrence`
-  - multi-head matrix-memory retention path
-  - `gated_retention` mode where learned matrix memory becomes the primary substrate
-- `bridge_export`, `oracle_analysis`, `teacher_export`
-  - descendant-facing boundary helpers
-- `runtime`, `eval`, `train_eval`, `artifacts`
-  - lightweight runtime and evaluation support
+1. it is a mechanism, not a project policy
+2. at least two descendants want the same thing
+3. the generalized API is simpler than keeping the duplication
+
+This rule is the main defense against turning the kernel into a renamed
+collection of branches. Full detail in
+[`docs/architecture.md`](./docs/architecture.md) and the boundary against the
+runtime in [`docs/chronohorn_boundary.md`](./docs/chronohorn_boundary.md).
+
+## Causality is verified
+
+All substrate modes are verified by
+[`tests/test_causality.py`](./tests/test_causality.py). The test feeds two
+identical sequences up to position *t*, different after *t*. If logits at
+position *t* differ, causality is violated and CI fails. Modes verified:
+`frozen`, `learnable_mixing`, `learnable_decays`, selective scan augment
+(`state_dim > 0`), `readout_bands`, routed experts.
+
+The dependency firewall — that decepticons never imports its descendants — is
+enforced by an AST scan in
+[`tests/test_dependency_firewall.py`](./tests/test_dependency_firewall.py).
 
 ## Docs
 
-- [docs/architecture.md](./docs/architecture.md)
-  - package and layer map
-- [docs/kernel_matrix.md](./docs/kernel_matrix.md)
-  - extraction roadmap and primitive matrix
-- [docs/CHRONOHORN_KERNEL_BOUNDARY.md](./docs/CHRONOHORN_KERNEL_BOUNDARY.md)
-  - boundary between the kernel and the Chronohorn runtime system
-- [docs/EXPORT_ABI.md](./docs/EXPORT_ABI.md)
-  - draft `opc-export` contract
-- [docs/downstream_patterns.md](./docs/downstream_patterns.md)
-  - causal, noncausal, oracle, bridge, and byte-latent descendant patterns
-- [docs/lineage.md](./docs/lineage.md)
-  - source lineage and attribution
-- [examples/README.md](./examples/README.md)
-  - example descendants and dev tools
-- [tests/README.md](./tests/README.md)
-  - verification surface
+- [`docs/architecture.md`](./docs/architecture.md) — package map, three-layer model, promotion rule
+- [`docs/kernel_matrix.md`](./docs/kernel_matrix.md) — capability matrix
+- [`docs/chronohorn_boundary.md`](./docs/chronohorn_boundary.md) — boundary against the runtime descendant
+- [`docs/downstream_patterns.md`](./docs/downstream_patterns.md) — causal, noncausal, oracle, bridge, byte-latent patterns
+- [`docs/related_work.md`](./docs/related_work.md) — research anchors and prior art
+- [`docs/landscape.md`](./docs/landscape.md) — ecosystem snapshot (March 2026)
+- [`docs/lineage.md`](./docs/lineage.md) — source attribution
+- [`examples/README.md`](./examples/README.md) — example descendants and tooling
+- [`tests/README.md`](./tests/README.md) — verification surface
 
 ## Scope
 
-This is a research kernel and reference implementation.
+This is a research kernel and reference implementation. The current pressure
+from descendants is O(n) causal-bank architecture search — cheap ablation lanes
+to separate mechanisms before promotion, with scale and context survival
+checked in the descendant runtime.
 
-The current pressure from `chronohorn` is O(n) causal-bank architecture search:
+It is not a frontier runtime, a production compression stack, or a benchmark
+claim. It exists to keep the shared mechanism layer reusable and legible.
 
-- cheap `10k` ablation lanes to separate mechanisms before promotion
-- scale/context-survival follow-up in the descendant runtime
-- kernel work centered on better learned memory, not descendant-specific fleet policy
+## Contributing
 
-It is not:
-
-- a frontier runtime system
-- a production compression stack
-- a benchmark claim
-- a complete reproduction of every descendant in the broader workspace
-
-It exists to keep the shared mechanism layer reusable and legible.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md). Issues and pull requests welcome.
 
 ## License
 
-MIT
+MIT — see [`LICENSE`](./LICENSE).

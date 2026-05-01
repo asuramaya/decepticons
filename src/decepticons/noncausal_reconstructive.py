@@ -1,3 +1,5 @@
+"""Shared noncausal reconstructive adapter — field-shaped reconstruction with replay accounting."""
+
 from __future__ import annotations
 
 from collections.abc import Sequence

@@ -1,3 +1,5 @@
+"""Command-line entry point: ``decepticons fit`` for one-shot training and sampling."""
+
 from __future__ import annotations
 
 import argparse

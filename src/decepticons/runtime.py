@@ -1,3 +1,5 @@
+"""Runtime surfaces: sequence traces, fit reports, and metadata tagging."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping

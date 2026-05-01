@@ -26,15 +26,20 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
 ]
 
 [project.urls]
-Homepage = "https://github.com/asuramaya/decepticons"
+Homepage = "https://asuramaya.github.io/decepticons/"
 Repository = "https://github.com/asuramaya/decepticons"
+Issues = "https://github.com/asuramaya/decepticons/issues"
+Documentation = "https://github.com/asuramaya/decepticons/tree/main/docs"
 
 [project.scripts]
 decepticons = "decepticons.cli:main"

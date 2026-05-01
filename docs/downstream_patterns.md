@@ -1,43 +1,10 @@
 # Downstream Patterns
 
-This document extracts reusable library shapes from related descendant projects, but renames them by idea instead of
-by codename. The goal is to keep `decepticons` legible as a library surface even if the surrounding project
-names change.
+Five problem shapes the kernel is designed to support. Each names what
+descendant systems in the family typically need from a shared library, and
+which lessons keep repeating across them.
 
-Use [`lineage.md`](./lineage.md) for the attribution rule behind the non-vendored sources named here.
-
-## Naming Rule
-
-The public library should organize itself along a few explicit axes:
-
-- `causal`, `noncausal`, `oracle`, `bridge`
-- `byte`, `token`, `patch`, `field`, `sequence`
-- `predictive`, `reconstructive`, `compressive`, `export`, `probe`
-- `reservoir`, `delay`, `mixed_memory`, `routed`, `modulated`
-
-That vocabulary says what a module is for without requiring knowledge of internal project history.
-
-## Core Kernel
-
-The upstream experiment family suggests that the reusable center is not a single branch outcome, but the upstream core
-from which several descendants grow. The kernel is therefore made of:
-
-- substrate dynamics
-- learned side-channels
-- state views and sampled summaries
-- readouts
-- runtime and audit utilities
-
-The library should therefore present a reusable kernel first, with downstream adapters layered on top of it. In this
-framing, named descendants are not peers of the kernel. They are evidence about where the line should be drawn.
-
-## Pattern: Causal Predictive Or Compressive Systems
-
-Primary descendant sources:
-
-- causal runtime frontier notes from the broader workspace
-- causal validity notes from the broader workspace
-- causal negative-results notes from the broader workspace
+## Pattern: Causal Predictive / Compressive Systems
 
 Problem shape:
 
@@ -46,7 +13,7 @@ Problem shape:
 - strict legality constraints
 - real artifact-boundary accounting
 
-What these systems need from the library:
+What these systems need from the kernel:
 
 - causal state updates
 - score-before-update discipline
@@ -55,21 +22,15 @@ What these systems need from the library:
 - serializers that distinguish regenerated substrate from true payload
 - audit hooks for trainable-vs-frozen structure
 
-Key lessons from the docs:
+Recurring lessons:
 
 - bridge metrics are for search, not claims
 - full held-out fresh-process evaluation is mandatory
 - packed artifacts, not helper estimates, define the real runtime object
-- invalid branches can still teach useful lessons if they are documented honestly
-- exact experts work better as residual correction over a strong base than as full-distribution competitors
-- memory-first restarts are a legitimate downstream direction even when the first packed-memory build is weak
+- invalid branches still teach if they are documented honestly
+- exact experts work better as residual correction than as full-distribution competitors
 
 ## Pattern: Noncausal Reconstructive Systems
-
-Primary descendant sources:
-
-- noncausal reconstruction notes from the broader workspace
-- noncausal replay/accounting notes from the broader workspace
 
 Problem shape:
 
@@ -78,7 +39,7 @@ Problem shape:
 - replay removal rounds in reverse
 - count side-data economics honestly
 
-What these systems need from the library:
+What these systems need from the kernel:
 
 - noncausal context access
 - patch or field selectors
@@ -88,18 +49,14 @@ What these systems need from the library:
 - exact replay validators
 - break-even accounting for side data
 
-Key lessons from the docs:
+Recurring lessons:
 
 - side-data cost can dominate even when removal fractions look strong
 - adaptive dense-vs-sparse payload formats matter
 - dictionary factoring across rounds can be as important as position payloads
-- candidate generation and typed pruning should be explicit subsystems, not afterthoughts
+- candidate generation and typed pruning should be explicit subsystems
 
 ## Pattern: Oracle Analysis Systems
-
-Primary descendant source:
-
-- oracle-analysis notes from the broader workspace
 
 Problem shape:
 
@@ -107,7 +64,7 @@ Problem shape:
 - bidirectional local context
 - measure structural determinism, not deploy a runtime codec
 
-What these systems need from the library:
+What these systems need from the kernel:
 
 - bidirectional neighborhood extraction
 - leave-one-out corpus maps
@@ -115,7 +72,7 @@ What these systems need from the library:
 - self-inclusion and future-context attack utilities
 - rulebook-cost lower-bound estimates
 
-Key lessons from the docs:
+Recurring lessons:
 
 - exact uniqueness is often the wrong target
 - small candidate-set size is usually the stronger oracle label
@@ -124,37 +81,26 @@ Key lessons from the docs:
 
 ## Pattern: Bridge Export Systems
 
-Primary descendant sources:
-
-- bridge/export notes from the broader workspace
-- bridge architecture notes from the broader workspace
-
 Problem shape:
 
 - boundary layer between noncausal discovery and causal runtime
 - offline teacher data on one side
 - strictly causal exported features on the other
 
-What these systems need from the library:
+What these systems need from the kernel:
 
 - feature schemas for causal exports
 - offline teacher-label serialization
 - replay and audit adapters
 - explicit boundary contracts between analysis and runtime modules
 
-Key lessons from the docs:
+Recurring lessons:
 
 - oracle outputs should be treated as offline teacher or probe data
 - runtime consumers must not depend on live right-context scoring
-- the bridge should be a first-class subsystem rather than an implicit handoff
+- the bridge should be a first-class subsystem, not an implicit handoff
 
 ## Pattern: Byte-Latent Systems
-
-Primary sources:
-
-- this repo's current implementation
-- the broader upstream extraction direction
-- public byte-latent downstream repos as adaptations in the same family
 
 Problem shape:
 
@@ -162,7 +108,7 @@ Problem shape:
 - shorter internal latent stream carries local summaries
 - recurrent or reservoir-style state integrates those summaries over time
 
-What these systems need from the library:
+What these systems need from the kernel:
 
 - patchers and segmenters
 - latent commit policies
@@ -171,15 +117,12 @@ What these systems need from the library:
 - latent-stream metrics
 - optional quantization and export hooks
 
-Key lessons for the current repo:
-
-- the current `OpenPredictiveCoder` model is a reasonable reference adapter
-- it should not be the long-term center of the library if the goal is to extract the broader kernel
-- the durable public language is `byte`, `patch`, `latent`, `causal`, `oracle`, and `bridge`, not local branch names
+The current `ByteLatentPredictiveCoder` is the reference byte-latent adapter in
+this repo.
 
 ## Cross-Cutting Constraints
 
-Across the sibling docs, a few reusable constraints keep repeating:
+Across all five patterns, the same constraints keep repeating:
 
 - separate model legality from artifact-boundary legality
 - keep search metrics separate from claim metrics
@@ -188,30 +131,16 @@ Across the sibling docs, a few reusable constraints keep repeating:
 - treat invalid branches as falsifiers and teachers, not as frontier claims
 - make the runtime contract explicit whenever offline oracle analysis exists
 
-These are not just repo-specific habits. They are the shape of a serious reusable library surface for this family of
-work.
+These are not just repo habits — they are the shape of a serious reusable
+library surface for this family of work.
 
-## Suggested Public Module Names
+## How These Map to the Kernel
 
-If the library is generalized, the obvious public surfaces are:
-
-- `substrates`
-- `controllers`
-- `views`
-- `readouts`
-- `runtime`
-- `adapters`
-- `presets`
-
-Likely adapter names:
-
-- `causal_predictive`
-- `noncausal_reconstructive`
-- `oracle_analysis`
-- `bridge_export`
-- `byte_latent`
-
-## Lineage Note
-
-Named descendants still exist in the broader workspace and in the repo lineage note. They are useful for attribution,
-but they should stay secondary to the idea-based library surface.
+| Pattern | Kernel adapter |
+| --- | --- |
+| causal predictive | [`CausalPredictiveAdapter`](../src/decepticons/causal_predictive.py) |
+| noncausal reconstructive | [`NoncausalReconstructiveAdapter`](../src/decepticons/noncausal_reconstructive.py) |
+| oracle analysis | [`OracleAnalysisAdapter`](../src/decepticons/oracle_analysis.py) |
+| bridge export | [`BridgeExportAdapter`](../src/decepticons/bridge_export.py) |
+| paired teacher/export | [`TeacherExportAdapter`](../src/decepticons/teacher_export.py) |
+| byte-latent | [`ByteLatentPredictiveCoder`](../src/decepticons/model.py) |

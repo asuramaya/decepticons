@@ -11,15 +11,15 @@ It stays project-local on purpose:
 
 Kernel pieces reused here:
 
-- [`TeacherExportAdapter`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/teacher_export.py)
-- [`BridgeExportAdapter`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/bridge_export.py)
-- [`probability_diagnostics`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/probability_diagnostics.py)
-- [`BidirectionalContextProbe`](/Users/asuramaya/Code/carving_machine_v3/decepticons/src/decepticons/bidirectional_context.py)
+- [`TeacherExportAdapter`](../../../../src/decepticons/teacher_export.py)
+- [`BridgeExportAdapter`](../../../../src/decepticons/bridge_export.py)
+- [`probability_diagnostics`](../../../../src/decepticons/probability_diagnostics.py)
+- [`BidirectionalContextProbe`](../../../../src/decepticons/bidirectional_context.py)
 
 Entry points:
 
-- [`probe.py`](/Users/asuramaya/Code/carving_machine_v3/decepticons/examples/projects/bridge/teacher_export/probe.py)
-- [`smoke.py`](/Users/asuramaya/Code/carving_machine_v3/decepticons/examples/projects/bridge/teacher_export/smoke.py)
+- [`probe.py`](./probe.py)
+- [`smoke.py`](./smoke.py)
 
 Run from the repo root:
 
