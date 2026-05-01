@@ -7,6 +7,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-05-01
+
 ### Added
 - `decepticons.__version__` derived from package metadata.
 - `scripts/release.sh` — one-command version bump + tag + push.
@@ -87,5 +89,6 @@ First public release. Alpha-stage research kernel.
 - `tests/test_dependency_firewall.py` AST-scans the kernel to ensure
   decepticons never imports its descendants.
 
-[Unreleased]: https://github.com/asuramaya/decepticons/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/asuramaya/decepticons/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/asuramaya/decepticons/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/asuramaya/decepticons/releases/tag/v0.1.0
