@@ -6,8 +6,8 @@ import math
 
 import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 from decepticons.causal_bank import (
     CausalBankConfig,
@@ -1043,8 +1043,6 @@ class CausalBankModel(nn.Module):
         m_matrix = m_matrix.float()
         batch, seq_len, n_heads, head_dim = drive.shape
         half = head_dim // 2
-        device = drive.device
-        dtype = drive.dtype
 
         # Unpack transition matrix elements: each [B, T, H, half]
         a00 = m_matrix[..., 0]
@@ -1185,7 +1183,6 @@ class CausalBankModel(nn.Module):
         If `initial_state` is None, returns just `features` (legacy API).
         """
         batch, seq_len, _ = x_embed.shape
-        device = x_embed.device
         dtype = x_embed.dtype
 
         # 5 projections (shared trunk or independent)

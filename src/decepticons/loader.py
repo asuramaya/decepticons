@@ -354,6 +354,7 @@ def load_checkpoint(
         device: "cpu", "cuda", or "mps"
     """
     import torch
+
     from decepticons.models.causal_bank_torch import CausalBankModel
 
     ckpt_path = Path(path)

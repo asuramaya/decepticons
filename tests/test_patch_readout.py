@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch")
 
 from decepticons.causal_bank import CausalBankConfig
 from decepticons.models.causal_bank_torch import CausalBankModel
