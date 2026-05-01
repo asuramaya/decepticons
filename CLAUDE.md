@@ -1,6 +1,6 @@
 # Decepticons — Developer Guide
 
-Non-transformer primitives kernel. O(1) attention is deception.
+A backend-neutral kernel of predictive primitives — substrates, memory, gating, routing, readouts. **O(n) attention is deception.**
 
 ## What This Is
 

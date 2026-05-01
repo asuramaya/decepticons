@@ -601,6 +601,21 @@ ul.tight li { padding: 0.3rem 0 0.3rem 1.6rem; border: none; }
   font-family: var(--mono);
   line-height: 1.5;
 }
+/* Node rendered as a link out to a sibling project's site. */
+.node-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.node-link:hover {
+  border-color: var(--green);
+  color: inherit;
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1px var(--green) inset, 0 0 24px rgba(56, 255, 79, 0.12);
+}
+.node-link:hover .node-name { color: var(--green); }
 .connector {
   display: flex;
   align-items: center;
