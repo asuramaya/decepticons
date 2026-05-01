@@ -1,6 +1,6 @@
-# site/ — GitHub Pages draft
+# site/ — GitHub Pages source
 
-Draft static site for the project. No build step, no Jekyll. Plain HTML + CSS.
+Static site for <https://decepticons.win>. No build step, no Jekyll. Plain HTML + CSS.
 
 ## Preview locally
 
@@ -9,32 +9,25 @@ python3 -m http.server -d site 8000
 # open http://localhost:8000
 ```
 
-## Deploy options
+## Deployment
 
-### A. Serve from the `gh-pages` branch via Actions
+Auto-deployed by `.github/workflows/pages.yml` on every push to `main` that
+touches `site/**`. The workflow uploads this directory as a Pages artifact and
+publishes via `actions/deploy-pages`.
 
-Use the workflow at `.github/workflows/pages.yml` (included). It runs on every push to
-`main` that touches `site/**` and publishes the directory.
+Required GitHub setting: **Settings → Pages → Source = GitHub Actions**.
 
-In the GitHub repo settings, set:
+## Custom domain
 
-- **Settings → Pages → Build and deployment → Source** to **GitHub Actions**.
-
-### B. Serve from `/docs`
-
-GitHub Pages can serve from a `/docs` folder on `main`, but the existing `/docs` is
-full of Markdown documentation. If you want to use that path:
-
-1. Move the contents of `site/` into `docs/` (will collide with markdown files —
-   pick one).
-2. Keep the `.nojekyll` file so Jekyll does not try to render the `.md` files.
-3. **Settings → Pages → Source** → **Deploy from branch** → `main` / `/docs`.
-
-The included workflow (option A) is the cleaner path.
+`CNAME` contains the apex domain (`decepticons.win`). GitHub Pages reads it
+from the deployed artifact root. DNS for the domain must point at GitHub Pages
+(four `A` records to GitHub's apex IPs, or one `ALIAS`/`ANAME` if your registrar
+supports it; plus a `CNAME` for `www` if used).
 
 ## Files
 
 - `index.html` — landing page
 - `styles.css` — single stylesheet, dark theme
-- `assets/logo.webp` — copy of the project logo
+- `assets/logo.webp` — project logo
+- `CNAME` — custom domain
 - `.nojekyll` — disables Jekyll processing on Pages

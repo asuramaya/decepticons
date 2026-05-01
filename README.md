@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://asuramaya.github.io/decepticons/"><b>Website</b></a> ·
+  <a href="https://decepticons.win"><b>Website</b></a> ·
   <a href="./docs/architecture.md">Architecture</a> ·
   <a href="./docs/kernel_matrix.md">Kernel matrix</a> ·
   <a href="./examples/README.md">Examples</a> ·

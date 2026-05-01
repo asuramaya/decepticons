@@ -36,9 +36,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://asuramaya.github.io/decepticons/"
+Homepage = "https://decepticons.win"
 Repository = "https://github.com/asuramaya/decepticons"
 Issues = "https://github.com/asuramaya/decepticons/issues"
+Changelog = "https://github.com/asuramaya/decepticons/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/asuramaya/decepticons/tree/main/docs"
 
 [project.scripts]
