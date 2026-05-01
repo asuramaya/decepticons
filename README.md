@@ -1,5 +1,4 @@
 # Decepticons
-https://decepticons.win/
 
 <p align="center">
   <img src="docs/logo.webp" alt="Decepticons" width="520">
