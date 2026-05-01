@@ -7,6 +7,14 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+- `decepticons.__version__` derived from package metadata.
+- `scripts/release.sh` — one-command version bump + tag + push.
+- Release workflow now creates a GitHub Release with notes from `CHANGELOG.md`
+  and attaches the wheel + sdist as release assets.
+- Release workflow smoke-installs the built wheel and verifies the installed
+  `__version__` matches the pushed tag before publishing.
+
 ## [0.1.0] — 2026-04-30
 
 First public release. Alpha-stage research kernel.

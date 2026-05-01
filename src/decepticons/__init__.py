@@ -7,6 +7,15 @@ lightweight runtime helpers, and backend-neutral family metadata.
 The full package map and layer boundary are documented in `docs/architecture.md`.
 """
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
+
+try:
+    __version__ = _pkg_version("decepticons")
+except PackageNotFoundError:
+    # Running from a source tree without `pip install -e .`.
+    __version__ = "0.0.0+unknown"
+
 # Foundation and configuration surfaces.
 from decepticons.memory_protocol import (
     MEMORY_KINDS,
@@ -237,6 +246,7 @@ from .train_modes import TrainModeConfig, TrainStateMode
 from .views import ByteLatentFeatureView
 
 __all__ = [
+    "__version__",
     "AdaptiveSegmenter",
     "ArtifactAccounting",
     "ArtifactAuditRecord",
