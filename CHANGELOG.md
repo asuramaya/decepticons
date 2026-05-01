@@ -7,6 +7,24 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+- CLI: `decepticons --version` flag.
+- CLI: `decepticons info` subcommand — prints version, install path, and
+  public surface size. Useful for bug reports and environment diagnosis.
+- CLI: `decepticons score` subcommand — fits a model and prints bits/byte
+  without sampling.
+- CLI: `decepticons fit --seed N` for reproducible sampling.
+- `python -m decepticons` works as an alias for the `decepticons` script.
+
+### Changed
+- CLI: `fit` subcommand now uses the canonical `ByteLatentPredictiveCoder`
+  class name internally instead of the legacy `OpenPredictiveCoder` alias.
+- CLI help text for every subcommand now describes what it does.
+- `__all__` is now sorted case-insensitively (with `__version__` pinned
+  first), so additions land in a predictable place.
+- Removed stale section-header comments in `__init__.py` that no longer
+  matched the import order they sat over.
+
 ## [0.1.2] — 2026-05-01
 
 ### Docs
