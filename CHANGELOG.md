@@ -7,6 +7,12 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Docs
+- Install section now leads with explicit venv setup (Linux/Windows commands)
+  and links PEP 668. Previously the venv step was implicit, which tripped up
+  users on modern Debian/Ubuntu where `pip` refuses to write into the system
+  Python without a venv.
+
 ## [0.1.1] — 2026-05-01
 
 ### Added

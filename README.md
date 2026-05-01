@@ -31,7 +31,18 @@ downstream systems can specialize without forking the kernel.
 
 ## Install
 
-Python ≥ 3.11. Numpy is the only hard dependency for the kernel.
+Requires Python ≥ 3.11. The kernel itself only needs numpy.
+
+If you don't already have a Python virtual environment, make one first.
+Modern Linux distributions block `pip` from writing into the system Python
+([PEP 668](https://peps.python.org/pep-0668/)), so a venv is the standard path:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+```
+
+Then install from PyPI:
 
 ```bash
 pip install decepticons
@@ -41,10 +52,12 @@ For the model backends:
 
 ```bash
 pip install "decepticons[torch]"   # PyTorch CausalBankModel + routed readouts
-pip install "decepticons[metal]"   # Apple MLX backend
+pip install "decepticons[metal]"   # Apple MLX backend (Apple Silicon)
 ```
 
-For development from source:
+To leave the venv when you're done: `deactivate`.
+
+For development from source (clone + editable install + run tests):
 
 ```bash
 git clone https://github.com/asuramaya/decepticons

@@ -112,9 +112,20 @@
   <div class="wrap">
     <h2>Install</h2>
     <p class="lede-sm">Python ≥ 3.11. The kernel itself only needs numpy.</p>
+
+    <h3 class="sub">1 · Create a virtual environment</h3>
+    <p>
+      If you don't already have one. Modern Linux distributions block <code>pip</code> from
+      writing into the system Python (<a href="https://peps.python.org/pep-0668/">PEP 668</a>),
+      so a venv is the standard path:
+    </p>
+<pre><code class="lang-bash">python3 -m venv .venv
+source .venv/bin/activate       # Windows: .venv\Scripts\activate</code></pre>
+
+    <h3 class="sub">2 · Install from PyPI</h3>
     <div class="cards three">
       <div class="card">
-        <h3>From PyPI</h3>
+        <h3>Kernel only</h3>
 <pre><code>pip install decepticons</code></pre>
         <p class="muted">Numpy-only install. Sufficient for the byte-latent quickstart and every primitive in the kernel.</p>
       </div>
@@ -129,7 +140,9 @@
         <p class="muted">Adds the MLX backend equivalent for Apple Silicon.</p>
       </div>
     </div>
+
     <p class="caption">
+      To leave the venv when you're done: <code>deactivate</code>.
       For development from source, see
       <a href="https://github.com/asuramaya/decepticons/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.
     </p>
