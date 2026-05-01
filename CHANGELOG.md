@@ -26,6 +26,15 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `decepticons --help` description now describes what the CLI does instead of
   the generic "Decepticons CLI" placeholder.
 
+### Packaging
+- README install section now leads with `pip install decepticons` for end users;
+  source-install instructions moved under a "for development" heading.
+- README image and inter-doc links converted to absolute GitHub URLs so the
+  README renders correctly on PyPI (relative paths break outside GitHub).
+- Added a PyPI version badge to the README header.
+- Added `MANIFEST.in` so the sdist ships `CHANGELOG.md`, `CONTRIBUTING.md`,
+  and `.github/workflows/` for downstream packagers.
+
 ## [0.1.0] — 2026-04-30
 
 First public release. Alpha-stage research kernel.
