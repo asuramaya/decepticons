@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+title: "Decepticons — a backend-neutral kernel of predictive primitives"
+message: "If you use this software in research, please cite it as below."
+type: software
+authors:
+  - name: "Decepticons contributors"
+repository-code: "https://github.com/asuramaya/decepticons"
+url: "https://decepticons.win"
+abstract: >-
+  A backend-neutral kernel of predictive primitives — substrates, memory,
+  gating, routing, readouts. Reusable across descendant systems without
+  forking the kernel itself. O(n) attention is deception.
+keywords:
+  - predictive-coding
+  - sequence-modeling
+  - compression
+  - kernel
+  - non-transformer
+license: MIT
+version: "0.1.3"
+date-released: "2026-05-01"

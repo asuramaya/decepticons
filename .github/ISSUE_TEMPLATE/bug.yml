@@ -1,0 +1,48 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, what did you get instead?
+      placeholder: |
+        Steps to reproduce
+        1. ...
+        2. ...
+
+        Expected: ...
+        Actual: ...
+    validations:
+      required: true
+  - type: input
+    id: decepticons-version
+    attributes:
+      label: decepticons version
+      placeholder: "0.1.3 (or git SHA if installed from source)"
+    validations:
+      required: true
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "3.12.x"
+    validations:
+      required: true
+  - type: input
+    id: backend
+    attributes:
+      label: Backend
+      placeholder: "numpy-only / torch / mlx (Apple Silicon)"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traceback
+      description: Paste the relevant error output. Use a code block.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Config dataclass instance, minimal reproduction snippet.

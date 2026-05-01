@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a new primitive, mechanism, or kernel surface change.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: What problem does this solve?
+      description: |
+        Concrete pressure from your work, not a hypothetical. If it's about
+        training, fleet, replay, MCP, or experiment tracking — that belongs
+        in the chronohorn repo, not here.
+    validations:
+      required: true
+  - type: textarea
+    id: promotion
+    attributes:
+      label: The promotion rule
+      description: |
+        Code moves into `src/` only when ALL THREE hold. Please demonstrate them:
+        1. It is a mechanism, not a project policy.
+        2. At least two descendants want the same thing.
+        3. The generalized API is simpler than keeping the duplication.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape
+      description: A brief sketch of the API. Don't write tomes.
+    validations:
+      required: true
