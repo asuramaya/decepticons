@@ -1,10 +1,12 @@
 """Public API for the decepticons kernel.
 
-This package is the shared mechanism layer for downstream systems such as
-Chronohorn: reusable substrates, control primitives, memory blocks, readouts,
-lightweight runtime helpers, and backend-neutral family metadata.
+A backend-neutral kernel of predictive primitives — substrates, memory, gating,
+routing, readouts — that downstream systems combine into trained models without
+forking the kernel itself. The shared mechanism layer for predictive descendants.
 
 The full package map and layer boundary are documented in `docs/architecture.md`.
+The boundary against the runtime descendant is documented in
+`docs/chronohorn_boundary.md`.
 """
 
 from importlib.metadata import PackageNotFoundError

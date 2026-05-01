@@ -23,10 +23,10 @@
 > primitives — substrates, memory, gating, routing, readouts — that downstream
 > systems combine into trained models without forking the kernel itself.
 
-`decepticons` is the shared mechanism layer for predictive descendants. It
-extracts the reusable parts (substrate dynamics, controller summaries, memory
-primitives, feature views, readouts, runtime helpers) from a broader experiment
-family so downstream systems can specialize without forking the kernel.
+`decepticons` is the shared mechanism layer for predictive descendants:
+substrate dynamics, controller summaries, memory primitives, feature views,
+readouts, and runtime helpers extracted from a broader experiment family so
+downstream systems can specialize without forking the kernel.
 
 ## Install
 
@@ -91,8 +91,8 @@ Full capability matrix: [`docs/kernel_matrix.md`](./docs/kernel_matrix.md).
 
 ```
 decepticons  ──→  chronohorn  ──→  heinrich
-  kernel          runtime          evidence / audit
- (this repo)   training, fleet     model forensics
+  kernel          runtime          forensics
+ (this repo)   training · fleet   geometry · audit
 ```
 
 Three layers inside this repo:
@@ -105,9 +105,9 @@ Three layers inside this repo:
 
 Code moves into `src/` only when **all three** hold:
 
-1. it is a mechanism, not a project policy
-2. at least two descendants want the same thing
-3. the generalized API is simpler than keeping the duplication
+1. It is a mechanism, not a project policy.
+2. At least two descendants want the same thing.
+3. The generalized API is simpler than keeping the duplication.
 
 This rule is the main defense against turning the kernel into a renamed
 collection of branches. Full detail in
@@ -117,14 +117,13 @@ runtime in [`docs/chronohorn_boundary.md`](./docs/chronohorn_boundary.md).
 ## Causality is verified
 
 All substrate modes are verified by
-[`tests/test_causality.py`](./tests/test_causality.py). The test feeds two
-identical sequences up to position *t*, different after *t*. If logits at
-position *t* differ, causality is violated and CI fails. Modes verified:
-`frozen`, `learnable_mixing`, `learnable_decays`, selective scan augment
+[`tests/test_causality.py`](./tests/test_causality.py): it feeds two identical
+sequences up to position *t*, different after *t*. If logits at position *t*
+differ, causality is violated and CI fails. Modes verified: `frozen`,
+`learnable_mixing`, `learnable_decays`, selective scan augment
 (`state_dim > 0`), `readout_bands`, routed experts.
 
-The dependency firewall — that decepticons never imports its descendants — is
-enforced by an AST scan in
+decepticons never imports its descendants — enforced by an AST scan in
 [`tests/test_dependency_firewall.py`](./tests/test_dependency_firewall.py).
 
 ## Docs

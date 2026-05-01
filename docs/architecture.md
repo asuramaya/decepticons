@@ -2,9 +2,8 @@
 
 The shortest route to understanding the repo as code rather than as a historical
 story. For the public website version of this material, see
-[the project site](https://asuramaya.github.io/decepticons/). For the kernel
-boundary against the runtime descendant, see
-[`chronohorn_boundary.md`](./chronohorn_boundary.md).
+[decepticons.win](https://decepticons.win). For the kernel boundary against the
+runtime descendant, see [`chronohorn_boundary.md`](./chronohorn_boundary.md).
 
 ## Three Layers
 
@@ -67,7 +66,7 @@ Code moves from a project into `src/` only when **all three** hold:
 
 1. It is a mechanism, not a project policy.
 2. At least two descendants want the same thing.
-3. The generalized API is simpler than keeping the duplication in project code.
+3. The generalized API is simpler than keeping the duplication.
 
 This rule is the main defense against turning the kernel into a renamed
 collection of branches.

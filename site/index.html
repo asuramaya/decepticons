@@ -181,7 +181,7 @@ print(ByteCodec.decode_text(sample))</code></pre>
         <div class="node-tag">YOU ARE HERE</div>
         <div class="node-name">decepticons</div>
         <div class="node-role">kernel</div>
-        <div class="node-desc">substrates · memory · control · readouts</div>
+        <div class="node-desc">substrates · memory · gating · routing · readouts</div>
       </div>
       <div class="connector"><span class="dep">imports</span></div>
       <div class="node">
@@ -201,8 +201,7 @@ print(ByteCodec.decode_text(sample))</code></pre>
       Dependencies flow left-to-right.
       <strong class="ok">decepticons never imports its descendants</strong> —
       enforced by an AST scan in
-      <a href="https://github.com/asuramaya/decepticons/blob/main/tests/test_dependency_firewall.py"><code>tests/test_dependency_firewall.py</code></a>
-      that fails CI if any descendant name leaks into the kernel.
+      <a href="https://github.com/asuramaya/decepticons/blob/main/tests/test_dependency_firewall.py"><code>tests/test_dependency_firewall.py</code></a>.
     </p>
 
     <h3 class="sub">Inside the kernel</h3>
@@ -351,9 +350,8 @@ print(ByteCodec.decode_text(sample))</code></pre>
         <p>
           The test in
           <a href="https://github.com/asuramaya/decepticons/blob/main/tests/test_causality.py"><code>tests/test_causality.py</code></a>
-          feeds two identical sequences up to position <em>t</em>, different after.
-          If logits at position <em>t</em> differ between the two, the substrate has seen the future
-          and the test fails.
+          feeds two identical sequences up to position <em>t</em>, different after <em>t</em>.
+          If logits at position <em>t</em> differ between the two, causality is violated and CI fails.
         </p>
         <p class="muted">
           An earlier research line lost months to an accidentally-unfrozen <code>causal_mask</code>

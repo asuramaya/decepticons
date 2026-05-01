@@ -10,7 +10,10 @@ from .model import OpenPredictiveCoder
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="decepticons", description="Decepticons CLI")
+    parser = argparse.ArgumentParser(
+        prog="decepticons",
+        description="A backend-neutral kernel of predictive primitives — fit and sample from a byte-latent predictive coder.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     fit_parser = subparsers.add_parser("fit", help="fit on a text file and optionally sample")

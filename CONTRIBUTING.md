@@ -34,7 +34,7 @@ The promotion rule: code moves into `src/` only when **all three** hold:
 
 1. It is a mechanism, not a project policy.
 2. At least two descendants want the same thing.
-3. The generalized API is simpler than keeping the duplication in project code.
+3. The generalized API is simpler than keeping the duplication.
 
 If you're adding a new primitive, a checklist:
 

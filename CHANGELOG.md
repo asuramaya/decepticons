@@ -15,6 +15,17 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Release workflow smoke-installs the built wheel and verifies the installed
   `__version__` matches the pushed tag before publishing.
 
+### Changed
+- Aligned canonical phrasing across README, docs, site, and package metadata:
+  unified five-pillar list (`substrates, memory, gating, routing, readouts`),
+  unified ecosystem labels (`kernel · runtime · forensics`), unified promotion
+  rule wording, unified causality-test pitch.
+- `pyproject.toml` description now matches the README/site tagline voice.
+- `decepticons.__init__` module docstring rewritten to match the canonical
+  one-line description.
+- `decepticons --help` description now describes what the CLI does instead of
+  the generic "Decepticons CLI" placeholder.
+
 ## [0.1.0] — 2026-04-30
 
 First public release. Alpha-stage research kernel.
